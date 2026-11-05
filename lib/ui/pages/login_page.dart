@@ -42,8 +42,8 @@ class _LoginPageState extends State<LoginPage> {
       MaterialPageRoute(
         builder: (_) => SolidLogin(
           title: 'Masuk ke MotorQu',
-          link: 'https://github.com/JavierGavra/solid-client',
-          clientId: 'https://javiergavra.github.io/solid-client/client-profile.jsonld',
+          link: 'https://github.com/JavierGavra/motorqu-solid',
+          clientId: 'https://javiergavra.github.io/motorqu-solid/client-profile.jsonld',
           redirectUris: const ['com.example.motorqusolid://redirect'],
           autoLogin: false,
           child: const HomePage(),
