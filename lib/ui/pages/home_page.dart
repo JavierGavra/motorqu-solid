@@ -1,83 +1,297 @@
 import 'package:flutter/material.dart';
-import 'package:solidpod/solidpod.dart';
+import 'package:motorqu_solid/models/motorcycle.dart';
+import 'package:motorqu_solid/ui/widgets/empty_state.dart';
+import 'package:motorqu_solid/ui/widgets/filter_chip.dart';
+import 'package:motorqu_solid/ui/widgets/motor_card.dart';
+import 'package:motorqu_solid/ui/widgets/stat_item.dart';
 
-class HomePage extends StatelessWidget {
+class HomePage extends StatefulWidget {
   const HomePage({super.key});
+
+  @override
+  State<HomePage> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomePage> {
+  String _filter = 'all'; // 'all', 'private', 'group'
+  final List<Motorcycle> _dummyMotorcycles = [
+    Motorcycle(
+      id: 'motor-001',
+      name: 'Motor Harian',
+      brand: 'Honda',
+      model: 'Beat',
+      plate: 'B 1234 MTR',
+      year: '2022',
+      color: 'Hitam',
+      groupId: 'private-demo',
+      lastOdometer: 12450,
+      lastServiceAt: DateTime(2026, 10, 28),
+      createdBy: 'demo-user',
+      createdAt: DateTime(2026, 1, 10),
+    ),
+    Motorcycle(
+      id: 'motor-002',
+      name: 'Motor Keluarga',
+      brand: 'Yamaha',
+      model: 'NMAX',
+      plate: 'B 5678 MTR',
+      year: '2021',
+      color: 'Biru',
+      groupId: 'family-demo',
+      isGroupMotor: true,
+      lastOdometer: 23800,
+      lastServiceAt: DateTime(2026, 10, 5),
+      memberUids: ['demo-user', 'family-user'],
+      createdBy: 'demo-user',
+      createdAt: DateTime(2026, 2, 15),
+    ),
+  ];
+
+  bool _checkIsDue(Motorcycle moto) {
+    final serviceDate = moto.lastServiceAt;
+    if (serviceDate != null) {
+      final days = DateTime.now().difference(serviceDate).inDays;
+      return days >= 30;
+    }
+    final days = DateTime.now().difference(moto.createdAt).inDays;
+    return days >= 30;
+  }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final textPrimary = isDark
-        ? const Color(0xFFF8FAFC)
-        : const Color(0xFF0F172A);
-    final textSecondary = isDark
-        ? const Color(0xFF94A3B8)
-        : const Color(0xFF64748B);
+    final displayName = 'Pengguna Demo';
+    final firstName = displayName.split(' ').first;
+    final allMotos = _dummyMotorcycles;
+
+    // Hitung ringkasan oli
+    int dueCount = 0;
+    int safeCount = 0;
+    for (final m in allMotos) {
+      final isDue = _checkIsDue(m);
+      if (isDue) {
+        dueCount++;
+      } else {
+        safeCount++;
+      }
+    }
+
+    // Terapkan filter
+    List<Motorcycle> filteredMotos = allMotos;
+    if (_filter == 'private') {
+      filteredMotos = allMotos.where((m) => !m.isGroupMotor).toList();
+    } else if (_filter == 'group') {
+      filteredMotos = allMotos.where((m) => m.isGroupMotor).toList();
+    }
 
     return Scaffold(
-      backgroundColor: isDark
-          ? const Color(0xFF0B1120)
-          : const Color(0xFFF8FAFC),
-      appBar: AppBar(
-        title: const Text('MotorQu'),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        actions: [
-          IconButton(
-            tooltip: 'Keluar',
-            icon: const Icon(Icons.logout_rounded),
-            onPressed: () => _logout(context),
-          ),
-        ],
-      ),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(28),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(
-                Icons.two_wheeler_rounded,
-                size: 64,
-                color: Color(0xFF1976D2),
-              ),
-              const SizedBox(height: 20),
-              Text(
-                'Selamat datang di MotorQu',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w800,
-                  color: textPrimary,
+      body: CustomScrollView(
+        slivers: [
+          // Modern Header
+          SliverAppBar(
+            floating: true,
+            pinned: true,
+            expandedHeight: 120,
+            elevation: 0,
+            backgroundColor: isDark
+                ? const Color(0xFF0B1120)
+                : const Color(0xFFF8FAFC),
+            flexibleSpace: FlexibleSpaceBar(
+              background: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      isDark
+                          ? const Color(0xFF1E293B).withValues(alpha: 0.5)
+                          : Colors.blue.shade50,
+                      isDark
+                          ? const Color(0xFF0B1120)
+                          : const Color(0xFFF8FAFC),
+                    ],
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                  ),
+                ),
+                padding: const EdgeInsets.fromLTRB(20, 48, 20, 12),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Row(
+                          children: [
+                            Text(
+                              'Halo, $firstName! ',
+                              style: TextStyle(
+                                fontSize: 15,
+                                color: isDark
+                                    ? const Color(0xFF94A3B8)
+                                    : Colors.black54,
+                              ),
+                            ),
+                            const Text('👋', style: TextStyle(fontSize: 15)),
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'MotorQu',
+                          style: TextStyle(
+                            fontSize: 26,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: -0.5,
+                            color: isDark
+                                ? Colors.white
+                                : const Color(0xFF0F172A),
+                          ),
+                        ),
+                      ],
+                    ),
+                    CircleAvatar(
+                      radius: 22,
+                      backgroundColor: const Color(0xFFE3F2FD),
+                      backgroundImage: null,
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 8),
-              Text(
-                'Akun Solid berhasil terautentikasi.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: textSecondary),
-              ),
-            ],
+            ),
           ),
-        ),
+
+          // Content
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (allMotos.isNotEmpty) ...[
+                    // Status Overview Card (60-30-10 Brand Gradient)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 18,
+                        vertical: 16,
+                      ),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF1976D2), Color(0xFF1565C0)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF1976D2)
+                                .withValues(alpha: 0.35),
+                            blurRadius: 16,
+                            offset: const Offset(0, 6),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          StatItem(
+                            key: const ValueKey('total-motor-stat'),
+                            value: '${allMotos.length}',
+                            label: 'Total Motor',
+                            icon: Icons.two_wheeler_rounded,
+                            color: Colors.white,
+                          ),
+                          Container(
+                            width: 1,
+                            height: 38,
+                            color: Colors.white.withValues(alpha: 0.2),
+                          ),
+                          StatItem(
+                            value: '$safeCount',
+                            label: 'Oli Aman',
+                            icon: Icons.check_circle_rounded,
+                            color: const Color(0xFF81C784),
+                          ),
+                          Container(
+                            width: 1,
+                            height: 38,
+                            color: Colors.white.withValues(alpha: 0.2),
+                          ),
+                          StatItem(
+                            value: '$dueCount',
+                            label: 'Perlu Dicek',
+                            icon: Icons.warning_amber_rounded,
+                            color: dueCount > 0
+                                ? const Color(0xFFFFB74D)
+                                : Colors.white70,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Filter Chips
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          MotorFilterChip(
+                            value: 'all',
+                            label: 'Semua (${allMotos.length})',
+                            isDark: isDark,
+                            isSelected: _filter == 'all',
+                            onSelected: (value) =>
+                                setState(() => _filter = value),
+                          ),
+                          const SizedBox(width: 8),
+                          MotorFilterChip(
+                            value: 'private',
+                            label:
+                                'Pribadi (${allMotos.where((m) => !m.isGroupMotor).length})',
+                            isDark: isDark,
+                            isSelected: _filter == 'private',
+                            onSelected: (value) =>
+                                setState(() => _filter = value),
+                          ),
+                          const SizedBox(width: 8),
+                          MotorFilterChip(
+                            value: 'group',
+                            label:
+                                'Grup (${allMotos.where((m) => m.isGroupMotor).length})',
+                            isDark: isDark,
+                            isSelected: _filter == 'group',
+                            onSelected: (value) =>
+                                setState(() => _filter = value),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                ],
+              ),
+            ),
+          ),
+
+          // Daftar Motor / Empty State (Dengan Extra Bottom Padding untuk Floating Dock)
+          filteredMotos.isEmpty
+              ? SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: EmptyState(
+                    isTotalEmpty: allMotos.isEmpty,
+                    isDark: isDark,
+                  ),
+                )
+              : SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 100),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate((context, index) {
+                      final moto = filteredMotos[index];
+                      return MotorCard(moto: moto, isDark: isDark);
+                    }, childCount: filteredMotos.length),
+                  ),
+                ),
+        ],
       ),
     );
-  }
-
-  Future<void> _logout(BuildContext context) async {
-    try {
-      await logoutPod();
-      if (!context.mounted) return;
-      Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
-    } on Object catch (error) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Gagal keluar: $error'),
-          backgroundColor: const Color(0xFFDC2626),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    }
   }
 }

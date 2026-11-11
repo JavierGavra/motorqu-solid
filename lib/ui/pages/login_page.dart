@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:motorqu_solid/ui/pages/bottom_navigation.dart';
 import 'package:motorqu_solid/ui/pages/home_page.dart';
 import 'package:solidpod/solidpod.dart';
 import 'package:solidui/solidui.dart';
@@ -23,9 +24,9 @@ class _LoginPageState extends State<LoginPage> {
     try {
       final session = await tryRestoreSession();
       if (session != null && mounted) {
-        Navigator.of(
-          context,
-        ).pushReplacement(MaterialPageRoute(builder: (_) => const HomePage()));
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const BottomNavigation()),
+        );
         return;
       }
     } on Object catch (error) {
