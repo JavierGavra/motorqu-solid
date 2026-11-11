@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:motorqu_solid/ui/pages/bottom_navigation.dart';
-import 'package:motorqu_solid/ui/pages/home_page.dart';
 import 'package:solidpod/solidpod.dart';
 import 'package:solidui/solidui.dart';
 
@@ -47,7 +46,7 @@ class _LoginPageState extends State<LoginPage> {
           clientId: 'https://javiergavra.github.io/motorqu-solid/client-profile.jsonld',
           redirectUris: const ['com.example.motorqusolid://redirect'],
           autoLogin: false,
-          child: const HomePage(),
+          child: const BottomNavigation(),
         ),
       ),
     );
