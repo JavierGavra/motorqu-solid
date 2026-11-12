@@ -43,6 +43,7 @@ class Motorcycle {
   }
 
   Motorcycle copyWith({
+    String? id,
     String? name,
     String? brand,
     String? model,
@@ -55,67 +56,113 @@ class Motorcycle {
     int? lastOdometer,
     DateTime? lastServiceAt,
     List<String>? memberUids,
+    String? createdBy,
+    DateTime? createdAt,
+    bool clearPlate = false,
+    bool clearYear = false,
+    bool clearColor = false,
+    bool clearLastServiceAt = false,
   }) {
     return Motorcycle(
-      id: id,
+      id: id ?? this.id,
       name: name ?? this.name,
       brand: brand ?? this.brand,
       model: model ?? this.model,
-      plate: plate ?? this.plate,
-      year: year ?? this.year,
-      color: color ?? this.color,
+      plate: clearPlate ? null : (plate ?? this.plate),
+      year: clearYear ? null : (year ?? this.year),
+      color: clearColor ? null : (color ?? this.color),
       groupId: groupId ?? this.groupId,
       isGroupMotor: isGroupMotor ?? this.isGroupMotor,
       reminderIntervalKm: reminderIntervalKm ?? this.reminderIntervalKm,
       lastOdometer: lastOdometer ?? this.lastOdometer,
-      lastServiceAt: lastServiceAt ?? this.lastServiceAt,
+      lastServiceAt: clearLastServiceAt
+          ? null
+          : (lastServiceAt ?? this.lastServiceAt),
       memberUids: memberUids ?? this.memberUids,
-      createdBy: createdBy,
-      createdAt: createdAt,
+      createdBy: createdBy ?? this.createdBy,
+      createdAt: createdAt ?? this.createdAt,
     );
   }
 
-  factory Motorcycle.fromMap(Map<String, dynamic> data, String docId) {
+  static const turtlePrefixes =
+      '@prefix schema: <https://schema.org/> .\n'
+      '@prefix moto: <$_motoNs> .\n'
+      '@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .\n\n';
+
+  /// Satu motor -> satu blok Turtle (tanpa prefix).
+  String toTurtle() {
+    final props = <String>[
+      'schema:name "${_esc(name)}"',
+      'moto:brand "${_esc(brand)}"',
+      'moto:model "${_esc(model)}"',
+      if (plate != null) 'moto:plate "${_esc(plate!)}"',
+      if (year != null) 'moto:year "${_esc(year!)}"',
+      if (color != null) 'schema:color "${_esc(color!)}"',
+      'moto:groupId "${_esc(groupId)}"',
+      'moto:isGroupMotor $isGroupMotor',
+      'moto:reminderIntervalKm $reminderIntervalKm',
+      'moto:lastOdometer $lastOdometer',
+      if (lastServiceAt != null) 'moto:lastServiceAt ${_dt(lastServiceAt!)}',
+      for (final uid in memberUids) 'moto:memberUid "${_esc(uid)}"',
+      'moto:createdBy "${_esc(createdBy)}"',
+      'schema:dateCreated ${_dt(createdAt)}',
+    ];
+
+    final b = StringBuffer('<#moto-$id> a moto:Motorcycle ;\n');
+    for (var i = 0; i < props.length; i++) {
+      b.writeln('    ${props[i]}${i == props.length - 1 ? ' .' : ' ;'}');
+    }
+    return b.toString();
+  }
+
+  /// Satu blok Turtle -> satu motor. ID diambil dari subjek `<#moto-ID>`.
+  factory Motorcycle.fromTurtle(String turtle) {
+    final idMatch = RegExp(r'<#moto-([^>]+)>').firstMatch(turtle);
+    if (idMatch == null) {
+      throw const FormatException('Subjek <#moto-ID> tidak ditemukan');
+    }
+
+    final propRe = RegExp(r'^\s+(\w+:\w+)\s+(.+?)\s*[;.]\s*$');
+    final p = <String, List<String>>{};
+    for (final line in turtle.split('\n')) {
+      final m = propRe.firstMatch(line);
+      if (m != null) {
+        p.putIfAbsent(m.group(1)!, () => []).add(_literal(m.group(2)!));
+      }
+    }
+    String? one(String k) => p[k]?.first;
+
     return Motorcycle(
-      id: docId,
-      name: data['name'] ?? '',
-      brand: data['brand'] ?? '',
-      model: data['model'] ?? '',
-      plate: data['plate'],
-      year: data['year'],
-      color: data['color'],
-      groupId: data['groupId'] ?? '',
-      isGroupMotor: data['isGroupMotor'] ?? false,
-      reminderIntervalKm: data['reminderIntervalKm'] ?? 2000,
-      lastOdometer: data['lastOdometer'] ?? 0,
-      lastServiceAt: data['lastServiceAt'] is DateTime
-          ? data['lastServiceAt'] as DateTime
-          : null,
-      memberUids: List<String>.from(data['memberUids'] ?? []),
-      createdBy: data['createdBy'] ?? '',
-      createdAt: data['createdAt'] is DateTime
-          ? data['createdAt'] as DateTime
-          : DateTime.now(),
+      id: idMatch.group(1)!,
+      name: one('schema:name') ?? '',
+      brand: one('moto:brand') ?? '',
+      model: one('moto:model') ?? '',
+      plate: one('moto:plate'),
+      year: one('moto:year'),
+      color: one('schema:color'),
+      groupId: one('moto:groupId') ?? '',
+      isGroupMotor: one('moto:isGroupMotor') == 'true',
+      reminderIntervalKm:
+          int.tryParse(one('moto:reminderIntervalKm') ?? '') ?? 2000,
+      lastOdometer: int.tryParse(one('moto:lastOdometer') ?? '') ?? 0,
+      lastServiceAt: DateTime.tryParse(one('moto:lastServiceAt') ?? ''),
+      memberUids: p['moto:memberUid'] ?? const [],
+      createdBy: one('moto:createdBy') ?? '',
+      createdAt:
+          DateTime.tryParse(one('schema:dateCreated') ?? '') ?? DateTime.now(),
     );
   }
 
-  Map<String, dynamic> toMap() {
-    return {
-      'name': name,
-      'brand': brand,
-      'model': model,
-      'plate': plate,
-      'year': year,
-      'color': color,
-      'groupId': groupId,
-      'isGroupMotor': isGroupMotor,
-      'reminderIntervalKm': reminderIntervalKm,
-      'lastOdometer': lastOdometer,
-      'lastServiceAt': lastServiceAt,
-      'memberUids': memberUids,
-      'createdBy': createdBy,
-      'createdAt': createdAt,
-    };
+  /// Daftar motor <-> isi satu file .ttl
+  static String listToTurtle(List<Motorcycle> list) =>
+      turtlePrefixes + list.map((m) => m.toTurtle()).join('\n');
+
+  static List<Motorcycle> listFromTurtle(String turtle) {
+    return turtle
+        .split(RegExp(r'(?=^<#moto-)', multiLine: true))
+        .where((block) => block.trimLeft().startsWith('<#moto-'))
+        .map(Motorcycle.fromTurtle)
+        .toList();
   }
 
   @override
@@ -126,3 +173,21 @@ class Motorcycle {
   @override
   int get hashCode => id.hashCode;
 }
+
+const _motoNs = 'https://example.org/motorqu#'; // GANTI dengan milikmu
+
+String _esc(String s) => s
+    .replaceAll(r'\', r'\\')
+    .replaceAll('"', r'\"')
+    .replaceAll('\r', '')
+    .replaceAll('\n', r'\n');
+
+String _unesc(String s) =>
+    s.replaceAllMapped(RegExp(r'\\(.)'), (m) => m[1] == 'n' ? '\n' : m[1]!);
+
+String _literal(String raw) {
+  final m = RegExp(r'^"((?:[^"\\]|\\.)*)"').firstMatch(raw.trim());
+  return m != null ? _unesc(m.group(1)!) : raw.trim();
+}
+
+String _dt(DateTime d) => '"${d.toUtc().toIso8601String()}"^^xsd:dateTime';

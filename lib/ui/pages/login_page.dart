@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:motorqu_solid/services/database_service.dart';
 import 'package:motorqu_solid/ui/pages/bottom_navigation.dart';
-import 'package:motorqu_solid/ui/pages/home_page.dart';
 import 'package:solidpod/solidpod.dart';
 import 'package:solidui/solidui.dart';
+
+// Nama direktori app di Solid Pod — harus sama persis dengan yang dipakai
+// di SolidLogin (parameter appDirectory).
+const _kAppDirectory = 'motorqu-solid';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -23,10 +27,11 @@ class _LoginPageState extends State<LoginPage> {
   Future<void> _restoreSession() async {
     try {
       final session = await tryRestoreSession();
-      if (session != null && mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const BottomNavigation()),
-        );
+      print('Session Solid berhasil dipulihkan: $session');
+      if (session != null) {
+        await _initializeDatabaseService();
+        if (!mounted) return;
+        Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
         return;
       }
     } on Object catch (error) {
@@ -38,6 +43,20 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
+  Future<void> _initializeDatabaseService() async {
+    // Pastikan appDirName di solidpod selalu terset dengan benar,
+    // bahkan ketika SolidLogin widget tidak pernah dirender (misalnya
+    // saat session dipulihkan otomatis via tryRestoreSession).
+    // Tanpa ini, appDirName tetap '' → URL path double-slash → HTTP 401.
+    await setAppDirName(_kAppDirectory);
+
+    final webId = await getWebId();
+    if (webId == null || webId.isEmpty) {
+      throw StateError('WebID tidak tersedia setelah login.');
+    }
+    DatabaseService.init(webId);
+  }
+
   void _openSolidLogin() {
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -46,8 +65,9 @@ class _LoginPageState extends State<LoginPage> {
           link: 'https://github.com/JavierGavra/motorqu-solid',
           clientId: 'https://javiergavra.github.io/motorqu-solid/client-profile.jsonld',
           redirectUris: const ['com.example.motorqusolid://redirect'],
+          appDirectory: _kAppDirectory,
           autoLogin: false,
-          child: const HomePage(),
+          child: _AuthenticatedApp(onReady: _initializeDatabaseService),
         ),
       ),
     );
@@ -342,6 +362,41 @@ class _LoginPageState extends State<LoginPage> {
       width: 24,
       height: 24,
       child: Image.asset('assets/solid-emblem.png'),
+    );
+  }
+}
+
+class _AuthenticatedApp extends StatefulWidget {
+  const _AuthenticatedApp({required this.onReady});
+
+  final Future<void> Function() onReady;
+
+  @override
+  State<_AuthenticatedApp> createState() => _AuthenticatedAppState();
+}
+
+class _AuthenticatedAppState extends State<_AuthenticatedApp> {
+  late final Future<void> _initialization = widget.onReady();
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<void>(
+      future: _initialization,
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Center(
+            child: Text('Gagal menyiapkan database: ${snapshot.error}'),
+          );
+        }
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Scaffold(
+            body: Center(
+              child: CircularProgressIndicator(color: Color(0xFF1976D2)),
+            ),
+          );
+        }
+        return BottomNavigation();
+      },
     );
   }
 }

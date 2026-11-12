@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:motorqu_solid/theme/app_theme.dart';
-import 'package:motorqu_solid/ui/pages/home_page.dart';
+import 'package:motorqu_solid/ui/pages/add_motor_page.dart';
+import 'package:motorqu_solid/ui/pages/bottom_navigation.dart';
 import 'package:motorqu_solid/ui/pages/login_page.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -31,7 +32,8 @@ class MyApp extends StatelessWidget {
           home: const LoginPage(),
           routes: {
             '/login': (context) => const LoginPage(),
-            '/home': (context) => HomePage(),
+            '/home': (context) => BottomNavigation(),
+            '/addMotor': (context) => const AddMotorPage(),
           },
         );
       },
