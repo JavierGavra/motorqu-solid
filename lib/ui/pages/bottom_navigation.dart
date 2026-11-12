@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:motorqu_solid/ui/pages/home_page.dart';
+import 'package:motorqu_solid/ui/pages/profile_page.dart';
 import 'package:motorqu_solid/ui/widgets/action_bottom_sheet.dart';
 
 class BottomNavigation extends StatefulWidget {
@@ -20,7 +21,7 @@ class _BottomNavigationState extends State<BottomNavigation> {
         index: _index,
         children: [
           HomePage(),
-          const Scaffold(body: Placeholder()),
+          const ProfilePage(),
         ],
       ),
       bottomNavigationBar: _buildBottomNavigation(),
