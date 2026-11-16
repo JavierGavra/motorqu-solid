@@ -9,8 +9,8 @@ import 'package:uuid/uuid.dart';
 /// Struktur (relatif terhadap <pod>/<appDirName>/data/):
 ///   motorcycles/<motorId>/motor.ttl
 ///   motorcycles/<motorId>/records/<recordId>.ttl
-class MotorcycleService {
-  MotorcycleService(this.webId);
+class OilService {
+  OilService(this.webId);
 
   final String webId;
 

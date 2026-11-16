@@ -135,7 +135,7 @@ class _AddMotorPageState extends State<AddMotorPage> {
           createdBy: _db.webId,
           createdAt: DateTime.now(),
         );
-        await _db.motorcycleService.addMotorcycle(moto);
+        await _db.motorcycle.addMotorcycle(moto);
         print(moto.toTurtle());
       }
 

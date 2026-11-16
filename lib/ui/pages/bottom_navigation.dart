@@ -12,6 +12,14 @@ class BottomNavigation extends StatefulWidget {
 
 class _BottomNavigationState extends State<BottomNavigation> {
   int _index = 0; // 0 = Motor, 1 = Profil
+  final _homePageKey = GlobalKey<HomePageState>();
+
+  void _showTab(int index) {
+    setState(() => _index = index);
+    if (index == 0) {
+      _homePageKey.currentState?.refresh();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -20,7 +28,7 @@ class _BottomNavigationState extends State<BottomNavigation> {
       body: IndexedStack(
         index: _index,
         children: [
-          HomePage(),
+          HomePage(key: _homePageKey),
           const ProfilePage(),
         ],
       ),
@@ -60,7 +68,7 @@ class _BottomNavigationState extends State<BottomNavigation> {
               activeIcon: Icons.two_wheeler_rounded,
               label: 'Motor',
               isSelected: _index == 0,
-              onTap: () => setState(() => _index = 0),
+              onTap: () => _showTab(0),
               isDark: isDark,
             ),
 
@@ -98,7 +106,7 @@ class _BottomNavigationState extends State<BottomNavigation> {
               activeIcon: Icons.person_rounded,
               label: 'Profil',
               isSelected: _index == 1,
-              onTap: () => setState(() => _index = 1),
+              onTap: () => _showTab(1),
               isDark: isDark,
             ),
           ],

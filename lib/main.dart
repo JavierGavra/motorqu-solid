@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:motorqu_solid/navigation_observer.dart';
 import 'package:motorqu_solid/theme/app_theme.dart';
 import 'package:motorqu_solid/ui/pages/add_motor_page.dart';
 import 'package:motorqu_solid/ui/pages/bottom_navigation.dart';
@@ -26,6 +27,7 @@ class MyApp extends StatelessWidget {
           navigatorKey: navigatorKey,
           title: 'MotorQu',
           debugShowCheckedModeBanner: false,
+          navigatorObservers: [routeObserver],
           theme: AppTheme.light(),
           darkTheme: AppTheme.dark(),
           themeMode: themeMode,

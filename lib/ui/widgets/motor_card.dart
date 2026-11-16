@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:motorqu_solid/models/motorcycle.dart';
+import 'package:motorqu_solid/ui/pages/motor_detail_page.dart';
 
 class MotorCard extends StatelessWidget {
   final Motorcycle moto;
@@ -88,12 +89,12 @@ class MotorCard extends StatelessWidget {
         child: InkWell(
           borderRadius: BorderRadius.circular(20),
           onTap: () {
-            // Navigator.push(
-            //   context,
-            //   MaterialPageRoute(
-            //     builder: (_) => MotorDetailScreen(motorcycle: moto),
-            //   ),
-            // );
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => MotorDetailPage(motorcycle: moto),
+              ),
+            );
           },
           child: Padding(
             padding: const EdgeInsets.all(16),

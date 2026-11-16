@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:motorqu_solid/models/motorcycle.dart';
+import 'package:motorqu_solid/navigation_observer.dart';
 import 'package:motorqu_solid/services/database_service.dart';
 import 'package:motorqu_solid/ui/widgets/empty_state.dart';
 import 'package:motorqu_solid/ui/widgets/filter_chip.dart';
@@ -10,14 +11,15 @@ class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
   @override
-  State<HomePage> createState() => _HomeScreenState();
+  State<HomePage> createState() => HomePageState();
 }
 
-class _HomeScreenState extends State<HomePage> {
+class HomePageState extends State<HomePage> with RouteAware {
   String _filter = 'all'; // 'all', 'private', 'group'
   final _db = DatabaseService();
   List<Motorcycle> _motorcycles = [];
   bool isLoading = true;
+  ModalRoute<void>? _subscribedRoute;
 
   @override
   void initState() {
@@ -25,9 +27,35 @@ class _HomeScreenState extends State<HomePage> {
     _loadMotorcycles();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route != null && route != _subscribedRoute) {
+      if (_subscribedRoute != null) {
+        routeObserver.unsubscribe(this);
+      }
+      routeObserver.subscribe(this, route);
+      _subscribedRoute = route;
+    }
+  }
+
+  @override
+  void didPopNext() {
+    _loadMotorcycles();
+  }
+
+  Future<void> refresh() => _loadMotorcycles();
+
+  @override
+  void dispose() {
+    routeObserver.unsubscribe(this);
+    super.dispose();
+  }
+
   Future<void> _loadMotorcycles() async {
     try {
-      final motorcycles = await _db.getMotorcycles();
+      final motorcycles = await _db.motorcycle.getMotorcycles();
       if (mounted) {
         setState(() => _motorcycles = motorcycles);
       }

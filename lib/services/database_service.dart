@@ -1,5 +1,5 @@
-import 'package:motorqu_solid/models/motorcycle.dart';
 import 'package:motorqu_solid/services/motorcycle_service.dart';
+import 'package:motorqu_solid/services/oil_service.dart';
 
 class DatabaseService {
   static DatabaseService? _instance;
@@ -14,8 +14,7 @@ class DatabaseService {
 
   String webId;
 
-  MotorcycleService get motorcycleService => MotorcycleService(webId);
+  MotorcycleService get motorcycle => MotorcycleService(webId);
 
-  Future<List<Motorcycle>> getMotorcycles() =>
-      motorcycleService.getMotorcycles();
+  OilService get oil => OilService(webId);
 }
