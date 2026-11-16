@@ -136,6 +136,7 @@ class _AddMotorPageState extends State<AddMotorPage> {
           createdAt: DateTime.now(),
         );
         await _db.motorcycleService.addMotorcycle(moto);
+        print(moto.toTurtle());
       }
 
       if (mounted) {
