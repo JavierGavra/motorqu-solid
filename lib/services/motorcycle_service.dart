@@ -38,12 +38,13 @@ class MotorcycleService {
       ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
   }
 
-  Future<void> _save(Motorcycle moto) async {
+  Future<void> _save(Motorcycle moto, {required bool isNew}) async {
     await writePod(
       _motorPath(moto.id),
       Motorcycle.turtlePrefixes + moto.toTurtle(),
       encrypted: false,
       overwrite: true,
+      createAcl: isNew,
     );
   }
 
@@ -93,7 +94,7 @@ class MotorcycleService {
         memberUids: [webId],
       );
 
-      await _save(data);
+      await _save(data, isNew: false);
       return id;
     } catch (e) {
       debugPrint('Error adding motorcycle: $e');
@@ -101,15 +102,19 @@ class MotorcycleService {
     }
   }
 
-  Future<void> updateMotorcycle(Motorcycle updated) => _sync(() async {
-    // final list = await _load();
-    // final i = list.indexWhere((m) => m.id == updated.id);
-    // if (i == -1) {
-    //   throw StateError('Motor dengan id ${updated.id} tidak ditemukan');
-    // }
-    // list[i] = updated;
-    // await _save(updated);
+  Future<void> modifyMotorcycle(
+    String id,
+    Motorcycle Function(Motorcycle current) change,
+  ) => _sync(() async {
+    final current = await _readMotor(id);
+    if (current == null) {
+      throw StateError('Motor dengan id $id tidak ditemukan');
+    }
+    await _save(change(current), isNew: false);
   });
+
+  Future<void> updateMotorcycle(Motorcycle updated) =>
+      modifyMotorcycle(updated.id, (_) => updated);
 
   Future<void> deleteMotorcycle(String id) async {
     await deleteContainer(_root, id);
