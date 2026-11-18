@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:motorqu_solid/navigation_observer.dart';
 import 'package:motorqu_solid/theme/app_theme.dart';
 import 'package:motorqu_solid/ui/pages/add_motor_page.dart';
+import 'package:motorqu_solid/ui/pages/add_oil_page.dart';
 import 'package:motorqu_solid/ui/pages/bottom_navigation.dart';
 import 'package:motorqu_solid/ui/pages/login_page.dart';
 
@@ -36,6 +37,7 @@ class MyApp extends StatelessWidget {
             '/login': (context) => const LoginPage(),
             '/home': (context) => BottomNavigation(),
             '/addMotor': (context) => const AddMotorPage(),
+            '/addOil': (context) => const AddOilPage(),
           },
         );
       },

@@ -4,6 +4,7 @@ import 'package:motorqu_solid/models/motorcycle.dart';
 import 'package:motorqu_solid/models/oil_record.dart';
 import 'package:motorqu_solid/services/database_service.dart';
 import 'package:motorqu_solid/ui/pages/add_motor_page.dart';
+import 'package:motorqu_solid/ui/pages/add_oil_page.dart';
 
 class MotorDetailPage extends StatefulWidget {
   final Motorcycle motorcycle;
@@ -54,6 +55,7 @@ class _MotorDetailPageState extends State<MotorDetailPage> {
     try {
       await _db.oil.deleteOilRecord(widget.motorcycle.id, r.id);
       if (mounted) {
+        setState(() {});
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Catatan oli berhasil dihapus'),
@@ -198,9 +200,14 @@ class _MotorDetailPageState extends State<MotorDetailPage> {
             builder: (context, snapshot) {
               final records = snapshot.data ?? [];
 
-              return ListView(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-                children: [
+              return RefreshIndicator(
+                onRefresh: () async {
+                  setState(() {});
+                },
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+                  children: [
                   // 1. HERO CARD: ODOMETER & OIL HEALTH PROGRESS (Rivian & BMW style)
                   _buildOilHealthCard(
                     moto,
@@ -258,7 +265,8 @@ class _MotorDetailPageState extends State<MotorDetailPage> {
                     ),
                   ],
                 ],
-              );
+              ),
+            );
             },
           ),
         );
@@ -572,11 +580,16 @@ class _MotorDetailPageState extends State<MotorDetailPage> {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(16),
-          onTap: () {
-            // Navigator.push(
-            //   context,
-            //   MaterialPageRoute(builder: (_) => AddOilScreen(preselectMotorId: motorId)),
-            // );
+          onTap: () async {
+            final updated = await Navigator.push<bool>(
+              context,
+              MaterialPageRoute(
+                builder: (_) => AddOilPage(preselectMotorId: motorId),
+              ),
+            );
+            if (updated == true && mounted) {
+              setState(() {});
+            }
           },
           child: const Padding(
             padding: EdgeInsets.symmetric(vertical: 14, horizontal: 20),

@@ -6,9 +6,9 @@ import 'package:uuid/uuid.dart';
 
 /// Penyimpanan riwayat oli di Pod Solid.
 ///
-/// Struktur (relatif terhadap <pod>/<appDirName>/data/):
-///   motorcycles/<motorId>/motor.ttl
-///   motorcycles/<motorId>/records/<recordId>.ttl
+/// Struktur (relatif terhadap `pod/appDirName/data/`):
+///   `motorcycles/<motorId>/motorcycle.ttl`
+///   `motorcycles/<motorId>/records/<recordId>.ttl`
 class OilService {
   OilService(this.webId);
 
@@ -16,7 +16,7 @@ class OilService {
 
   static const _root = 'motorcycles';
 
-  static String _motorFile(String id) => '$_root/$id/motor.ttl';
+  static String _motorFile(String id) => '$_root/$id/motorcycle.ttl';
   static String _recordsDir(String id) => '$_root/$id/records';
   static String _recordFile(String motorId, String recordId) =>
       '${_recordsDir(motorId)}/$recordId.ttl';
@@ -47,7 +47,7 @@ class OilService {
 
   Future<({List<String> files, List<String> subDirs})> _list(String dir) async {
     try {
-      final url = await getDirUrl(dir);
+      final url = await getDirUrl("motorqu-solid/data/$dir");
       final res = await getResourcesInContainer(url);
       // SEMENTARA: hapus setelah kamu yakin formatnya.
       debugPrint('LIST $dir -> files=${res.files} subDirs=${res.subDirs}');
@@ -61,7 +61,7 @@ class OilService {
       // statusnya dulu supaya 401/403 yang asli tetap dilempar.
       debugPrint('LIST $dir gagal: ${e.runtimeType}: $e');
       try {
-        final url = await getDirUrl(dir);
+        final url = await getDirUrl("motorqu-solid/data/$dir");
         final status = await checkResourceStatus(url, isFile: false);
         // SEMENTARA: kirim baris ini kalau masih error.
         debugPrint('STATUS $dir ($url) -> $status');
@@ -144,7 +144,9 @@ class OilService {
   Future<void> deleteOilRecord(String motorId, String recordId) =>
       _sync(() async {
         await deleteFile(
-          fileUrl: await getFileUrl(_recordFile(motorId, recordId)),
+          fileUrl: await getFileUrl(
+            "motorqu-solid/data/${_recordFile(motorId, recordId)}",
+          ),
         );
 
         final motor = await _readMotor(motorId);

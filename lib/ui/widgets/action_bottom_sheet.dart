@@ -75,8 +75,8 @@ void openActionSheet(BuildContext context) {
                       subtitle: 'Update KM & riwayat oli',
                       isDark: isDark,
                       onTap: () {
-                        // Navigator.pop(ctx);
-                        // Navigator.pushNamed(context, '/addOil');
+                        Navigator.pop(ctx);
+                        Navigator.pushNamed(context, '/addOil');
                       },
                     ),
                   ),
