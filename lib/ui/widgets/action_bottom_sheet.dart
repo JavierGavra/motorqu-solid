@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:motorqu_solid/services/database_service.dart';
 import 'package:motorqu_solid/ui/widgets/action_card.dart';
 
 void openActionSheet(BuildContext context) {
@@ -110,8 +111,8 @@ void openActionSheet(BuildContext context) {
                       subtitle: 'Bikin garasi grup baru',
                       isDark: isDark,
                       onTap: () {
-                        // Navigator.pop(ctx);
-                        // _showCreateGroupDialog(context);
+                        Navigator.pop(ctx);
+                        _showCreateGroupDialog(context);
                       },
                     ),
                   ),
@@ -181,6 +182,24 @@ Future<void> _showCreateGroupDialog(BuildContext context) async {
   );
 
   if (name == null || name.isEmpty) return;
+  DatabaseService db = DatabaseService();
+  try {
+    await db.group.createGroup(name);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Grup "$name" berhasil dibuat!'),
+          backgroundColor: const Color(0xFF1976D2),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Gagal buat grup: $e')));
+    }
+  }
   debugPrint('Buat grup dengan nama: $name');
 }
 

@@ -1,3 +1,4 @@
+import 'package:motorqu_solid/services/group_service.dart';
 import 'package:motorqu_solid/services/motorcycle_service.dart';
 import 'package:motorqu_solid/services/oil_service.dart';
 
@@ -17,4 +18,6 @@ class DatabaseService {
   MotorcycleService get motorcycle => MotorcycleService(webId);
 
   OilService get oil => OilService(webId);
+
+  GroupService get group => GroupService(webId);
 }

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:motorqu_solid/main.dart';
 import 'package:motorqu_solid/services/auth_service.dart';
 import 'package:motorqu_solid/theme/app_theme.dart';
+import 'package:motorqu_solid/ui/pages/group_page.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:solidpod/solidpod.dart';
@@ -141,7 +142,9 @@ class _ProfilePageState extends State<ProfilePage> {
           OutlinedButton.icon(
             onPressed: () {
               Navigator.pop(ctx);
-              _toast('Fitur tes notifikasi akan tersedia setelah layanan notifikasi aktif.');
+              _toast(
+                'Fitur tes notifikasi akan tersedia setelah layanan notifikasi aktif.',
+              );
             },
             icon: const Icon(Icons.send_rounded, size: 16),
             label: const Text('Kirim Tes'),
@@ -544,7 +547,12 @@ class _ProfilePageState extends State<ProfilePage> {
                   size: 14,
                   color: textSecondary,
                 ),
-                onTap: _onGroupTap,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const GroupPage()),
+                  );
+                },
               ),
             ),
 
