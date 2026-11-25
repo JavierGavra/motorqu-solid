@@ -65,23 +65,24 @@ class _AddMotorPageState extends State<AddMotorPage> {
   }
 
   Future<void> _loadGroup() async {
-    // final uid = FirebaseAuth.instance.currentUser!.uid;
-    // final groups = await _db.getUserGroupsList(uid);
-    // if (mounted) {
-    setState(() {
-      //     _userGroups = groups;
-      _loadingGroup = false;
-      //     if (_isEdit && widget.moto!.isGroupMotor && groups.any((g) => g.id == widget.moto!.groupId)) {
-      //       _isGroup = true;
-      //       _selectedGroupId = widget.moto!.groupId;
-      //     } else if (groups.isNotEmpty) {
-      //       _selectedGroupId = groups.first.id;
-      //     } else {
-      //       _isGroup = false;
-      //       _selectedGroupId = null;
-      //     }
-    });
-    // }
+    final groups = await _db.group.getUserGroupsList();
+    if (mounted) {
+      setState(() {
+        _userGroups = groups;
+        _loadingGroup = false;
+        if (_isEdit &&
+            widget.moto!.isGroupMotor &&
+            groups.any((g) => g.id == widget.moto!.groupId)) {
+          _isGroup = true;
+          _selectedGroupId = widget.moto!.groupId;
+        } else if (groups.isNotEmpty) {
+          _selectedGroupId = groups.first.id;
+        } else {
+          _isGroup = false;
+          _selectedGroupId = null;
+        }
+      });
+    }
   }
 
   Future<void> _save() async {

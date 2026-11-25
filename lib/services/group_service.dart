@@ -49,6 +49,36 @@ class GroupService {
 
   // ----------------------------- POINTER & GROUP I/O -----------------------------
 
+  /// Menyinkronkan ACL motor milik user saat ini yang terdaftar di grup
+  /// agar anggota baru otomatis mendapat akses baca/tulis.
+  Future<void> _syncOwnedGroupMotorAcls(FamilyGroup group) async {
+    final ownPrefix = await _buildOwnResourceUrl('');
+    for (final motorUrl in group.sharedMotorUrls) {
+      if (!motorUrl.startsWith(ownPrefix)) continue;
+
+      final relFilePath = motorUrl.substring(ownPrefix.length);
+      final segments = relFilePath.split('/');
+      if (segments.length < 2) continue;
+      final motoId = segments[1];
+
+      // 1. Izin pada folder motor (mencakup subfolder records/)
+      await _applyIndividualAcl(
+        relativePath: '$_motorsRoot/$motoId',
+        isFile: false,
+        allowedWebIds: group.memberUids,
+        allowWrite: true,
+      );
+
+      // 2. Izin eksplisit pada file motorcycle.ttl
+      await _applyIndividualAcl(
+        relativePath: _motorPath(motoId),
+        isFile: true,
+        allowedWebIds: group.memberUids,
+        allowWrite: true,
+      );
+    }
+  }
+
   Future<void> _saveGroupPointer({
     required String groupId,
     required String groupUrl,
@@ -215,13 +245,10 @@ class GroupService {
 
       final group = await _fetchGroupByUrl(targetUrl);
       if (group == null || !group.memberUids.contains(webId)) {
-        // Bersihkan pointer jika grup dihapus atau user sudah dikeluarkan
         await _deleteGroupPointer(groupId);
         continue;
       }
 
-      // Jika user adalah owner utama & tidak ada invite QR aktif,
-      // pastikan ACL grup ketat hanya untuk memberUids
       if (group.ownerId == webId && group.activeInviteCode == null) {
         await _applyIndividualAcl(
           relativePath: _ownGroupPath(group.id),
@@ -230,6 +257,9 @@ class GroupService {
           allowWrite: true,
         );
       }
+
+      // Sinkronkan ACL motor milik user ini untuk anggota baru
+      await _syncOwnedGroupMotorAcls(group);
 
       groups.add(group);
     }
@@ -244,6 +274,9 @@ class GroupService {
 
     final group = await _fetchGroupByUrl(groupUrl);
     if (group == null) return [];
+
+    // Pastikan motor milik user sendiri di grup ini terbuka ACL-nya untuk semua member
+    await _syncOwnedGroupMotorAcls(group);
 
     final ownPrefix = await _buildOwnResourceUrl('');
     final futures = group.sharedMotorUrls.map((motorUrl) async {
@@ -292,49 +325,54 @@ class GroupService {
   // ----------------------------- MOTOR <-> GROUP -----------------------------
 
   /// Memasukkan motor pribadi milik user ke dalam grup
-  Future<void> assignMotorcycleToGroup(String motoId, String groupId) => _sync(
-    () async {
-      final groupUrl = await _readGroupPointerUrl(groupId);
-      if (groupUrl == null) throw Exception('Grup tidak ditemukan');
+  Future<void> assignMotorcycleToGroup(String motoId, String groupId) =>
+      _sync(() async {
+        final groupUrl = await _readGroupPointerUrl(groupId);
+        if (groupUrl == null) throw Exception('Grup tidak ditemukan');
 
-      final group = await _fetchGroupByUrl(groupUrl);
-      if (group == null) throw Exception('Data grup gagal dimuat');
+        final group = await _fetchGroupByUrl(groupUrl);
+        if (group == null) throw Exception('Data grup gagal dimuat');
 
-      // 1. Update motorcycle.ttl di Pod milik user
-      final rawMoto = await readPod(_motorPath(motoId));
-      final currentMoto = Motorcycle.fromTurtle(rawMoto);
-      final updatedMoto = currentMoto.copyWith(
-        groupId: groupId,
-        isGroupMotor: true,
-        memberUids: group.memberUids,
-      );
-
-      await writePod(
-        _motorPath(motoId),
-        Motorcycle.turtlePrefixes + updatedMoto.toTurtle(),
-        encrypted: false,
-        overwrite: true,
-        createAcl: false,
-      );
-
-      // 2. Beri izin baca/tulis folder motor (beserta records/) ke anggota grup
-      await _applyIndividualAcl(
-        relativePath: '$_motorsRoot/$motoId',
-        isFile: false,
-        allowedWebIds: group.memberUids,
-        allowWrite: true,
-      );
-
-      // 3. Daftarkan URL motor ini ke group.ttl
-      final ownMotorUrl = await _buildOwnResourceUrl(_motorPath(motoId));
-      if (!group.sharedMotorUrls.contains(ownMotorUrl)) {
-        final updatedGroup = group.copyWith(
-          sharedMotorUrls: [...group.sharedMotorUrls, ownMotorUrl],
+        // 1. Update motorcycle.ttl di Pod milik user
+        final rawMoto = await readPod(_motorPath(motoId));
+        final currentMoto = Motorcycle.fromTurtle(rawMoto);
+        final updatedMoto = currentMoto.copyWith(
+          groupId: groupId,
+          isGroupMotor: true,
+          memberUids: group.memberUids,
         );
-        await _writeGroupToUrl(updatedGroup);
-      }
-    },
-  );
+
+        await writePod(
+          _motorPath(motoId),
+          Motorcycle.turtlePrefixes + updatedMoto.toTurtle(),
+          encrypted: false,
+          overwrite: true,
+          createAcl: false,
+        );
+
+        // 2. Beri izin baca/tulis pada folder motor & file motorcycle.ttl ke anggota grup
+        await _applyIndividualAcl(
+          relativePath: '$_motorsRoot/$motoId',
+          isFile: false,
+          allowedWebIds: group.memberUids,
+          allowWrite: true,
+        );
+        await _applyIndividualAcl(
+          relativePath: _motorPath(motoId),
+          isFile: true,
+          allowedWebIds: group.memberUids,
+          allowWrite: true,
+        );
+
+        // 3. Daftarkan URL motor ini ke group.ttl
+        final ownMotorUrl = await _buildOwnResourceUrl(_motorPath(motoId));
+        if (!group.sharedMotorUrls.contains(ownMotorUrl)) {
+          final updatedGroup = group.copyWith(
+            sharedMotorUrls: [...group.sharedMotorUrls, ownMotorUrl],
+          );
+          await _writeGroupToUrl(updatedGroup);
+        }
+      });
 
   /// Mengeluarkan motor dari grup kembali menjadi motor pribadi ('private')
   Future<void> removeMotorcycleFromGroup(String motoId) => _sync(() async {

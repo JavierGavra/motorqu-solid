@@ -113,14 +113,13 @@ class GroupMemberCard extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       if (isMemberOwner) _ownerBadge(isGroupCreator, isDark),
-                      if (isOwner)
-                        _memberActions(textPrimary, textSecondary, isDark),
                     ],
                   ),
               ],
             ),
           ),
           // const SizedBox(width: 8),
+          if (isOwner) _memberActions(textPrimary, textSecondary, isDark),
         ],
       ),
     );

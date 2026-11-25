@@ -32,6 +32,7 @@ class _GroupPageState extends State<GroupPage> {
 
   late Future<List<FamilyGroup>> _groupsFuture;
   String? _selectedGroupId;
+  bool _isLoading = false;
 
   @override
   void initState() {
@@ -41,10 +42,25 @@ class _GroupPageState extends State<GroupPage> {
 
   Future<void> _refreshGroups() async {
     final future = _db.group.getUserGroupsList();
-    setState(() {
-      _groupsFuture = future;
-    });
+    if (mounted) {
+      setState(() {
+        _groupsFuture = future;
+      });
+    }
     await future;
+  }
+
+  Future<T> _withLoading<T>(Future<T> Function() action) async {
+    if (mounted) {
+      setState(() => _isLoading = true);
+    }
+    try {
+      return await action();
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
   }
 
   void _toast(String msg) {
@@ -65,10 +81,14 @@ class _GroupPageState extends State<GroupPage> {
     final name = await showCreateGroupDialog(context);
     if (name == null || name.isEmpty) return;
     try {
-      final newId = await _db.group.createGroup(name);
-      setState(() => _selectedGroupId = newId);
+      await _withLoading(() async {
+        final newId = await _db.group.createGroup(name);
+        if (mounted) {
+          setState(() => _selectedGroupId = newId);
+        }
+      });
       _toast('Grup "$name" berhasil dibuat');
-      _refreshGroups();
+      await _refreshGroups();
     } catch (e) {
       _toast('Gagal buat grup: $e');
     }
@@ -93,8 +113,11 @@ class _GroupPageState extends State<GroupPage> {
     final newName = await showEditGroupNameDialog(context, group.name);
     if (newName == null || newName.isEmpty || newName == group.name) return;
     try {
-      await _db.group.updateGroupName(group.id, newName);
+      await _withLoading(() async {
+        await _db.group.updateGroupName(group.id, newName);
+      });
       _toast('Nama grup diperbarui');
+      await _refreshGroups();
     } catch (e) {
       _toast('Gagal ubah nama: $e');
     }
@@ -136,10 +159,14 @@ class _GroupPageState extends State<GroupPage> {
     if (!ok) return;
 
     try {
-      await _db.group.leaveGroup(group.id);
+      await _withLoading(() async {
+        await _db.group.leaveGroup(group.id);
+        if (mounted) {
+          setState(() => _selectedGroupId = null);
+        }
+      });
       _toast('Anda telah keluar dari grup "${group.name}"');
-      setState(() => _selectedGroupId = null);
-      _refreshGroups();
+      await _refreshGroups();
     } catch (e) {
       _toast('Gagal keluar: $e');
     }
@@ -149,7 +176,9 @@ class _GroupPageState extends State<GroupPage> {
 
   Future<void> _addMotorToGroup(FamilyGroup group) async {
     try {
-      final myPrivates = await _db.group.getUserPrivateMotorcycles();
+      final myPrivates = await _withLoading(
+        _db.group.getUserPrivateMotorcycles,
+      );
       if (!mounted) return;
 
       if (myPrivates.isEmpty) {
@@ -165,8 +194,11 @@ class _GroupPageState extends State<GroupPage> {
       if (chosen == null) return;
 
       try {
-        await _db.group.assignMotorcycleToGroup(chosen.id, group.id);
+        await _withLoading(() async {
+          await _db.group.assignMotorcycleToGroup(chosen.id, group.id);
+        });
         _toast('Motor "${chosen.name}" berhasil dimasukkan ke garasi grup');
+        await _refreshGroups();
       } catch (e) {
         _toast('Gagal memasukkan motor: $e');
       }
@@ -188,8 +220,11 @@ class _GroupPageState extends State<GroupPage> {
     if (!ok) return;
 
     try {
-      await _db.group.removeMotorcycleFromGroup(moto.id);
+      await _withLoading(() async {
+        await _db.group.removeMotorcycleFromGroup(moto.id);
+      });
       _toast('Motor "${moto.name}" telah dikembalikan ke motor pribadi');
+      await _refreshGroups();
     } catch (e) {
       _toast('Gagal mengeluarkan motor: $e');
     }
@@ -218,9 +253,11 @@ class _GroupPageState extends State<GroupPage> {
     if (!ok) return;
 
     try {
-      await _db.group.kickMember(group.id, targetUid);
+      await _withLoading(() async {
+        await _db.group.kickMember(group.id, targetUid);
+      });
       _toast('"$memberName" telah dikeluarkan dari grup');
-      setState(() {});
+      await _refreshGroups();
     } catch (e) {
       _toast('Gagal mengeluarkan anggota: $e');
     }
@@ -247,9 +284,11 @@ class _GroupPageState extends State<GroupPage> {
     if (!ok) return;
 
     try {
-      await _db.group.promoteMemberToOwner(group.id, targetUid);
+      await _withLoading(() async {
+        await _db.group.promoteMemberToOwner(group.id, targetUid);
+      });
       _toast('"$memberName" sekarang menjadi Owner grup');
-      setState(() {});
+      await _refreshGroups();
     } catch (e) {
       _toast('Gagal mengangkat owner: $e');
     }
@@ -275,9 +314,11 @@ class _GroupPageState extends State<GroupPage> {
     if (!ok) return;
 
     try {
-      await _db.group.demoteOwner(group.id, targetUid);
+      await _withLoading(() async {
+        await _db.group.demoteOwner(group.id, targetUid);
+      });
       _toast('Status owner "$memberName" telah dicabut');
-      setState(() {});
+      await _refreshGroups();
     } catch (e) {
       _toast('Gagal mencabut status owner: $e');
     }
@@ -296,7 +337,7 @@ class _GroupPageState extends State<GroupPage> {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
-          onPressed: () => Navigator.pop(context),
+          onPressed: _isLoading ? null : () => Navigator.pop(context),
         ),
         title: Text(
           'Kelola Grup Keluarga',
@@ -308,37 +349,65 @@ class _GroupPageState extends State<GroupPage> {
           ),
         ),
         actions: [
-          GroupActionsMenu(onCreate: _createGroup, onJoin: _joinGroup),
+          AbsorbPointer(
+            absorbing: _isLoading,
+            child: GroupActionsMenu(onCreate: _createGroup, onJoin: _joinGroup),
+          ),
           const SizedBox(width: 8),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: _refreshGroups,
-        child: FutureBuilder<List<FamilyGroup>>(
-          future: _groupsFuture,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const _RefreshableLoading();
-            }
-            final groups = snapshot.data ?? [];
+      body: Stack(
+        children: [
+          RefreshIndicator(
+            onRefresh: _refreshGroups,
+            child: FutureBuilder<List<FamilyGroup>>(
+              future: _groupsFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const _RefreshableLoading();
+                }
+                final groups = snapshot.data ?? [];
 
-            if (groups.isEmpty) {
-              return NoGroupView(onCreate: _createGroup, onJoin: _joinGroup);
-            }
+                if (groups.isEmpty) {
+                  return NoGroupView(
+                    onCreate: _createGroup,
+                    onJoin: _joinGroup,
+                  );
+                }
 
-            if (_selectedGroupId == null ||
-                !groups.any((g) => g.id == _selectedGroupId)) {
-              _selectedGroupId = groups.first.id;
-            }
+                if (_selectedGroupId == null ||
+                    !groups.any((g) => g.id == _selectedGroupId)) {
+                  _selectedGroupId = groups.first.id;
+                }
 
-            final activeGroup = groups.firstWhere(
-              (g) => g.id == _selectedGroupId,
-              orElse: () => groups.first,
-            );
+                final activeGroup = groups.firstWhere(
+                  (g) => g.id == _selectedGroupId,
+                  orElse: () => groups.first,
+                );
 
-            return _buildGroupDetail(groups, activeGroup);
-          },
-        ),
+                return _buildGroupDetail(groups, activeGroup);
+              },
+            ),
+          ),
+          if (_isLoading)
+            Positioned.fill(
+              child: AbsorbPointer(
+                child: ColoredBox(
+                  color: const Color(0x66000000),
+                  child: Center(
+                    child: Container(
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surface,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const CircularProgressIndicator(),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
