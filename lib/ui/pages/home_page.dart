@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:motorqu_solid/models/motorcycle.dart';
 import 'package:motorqu_solid/navigation_observer.dart';
+import 'package:motorqu_solid/services/app_refresh.dart';
+import 'package:motorqu_solid/services/auth_service.dart';
 import 'package:motorqu_solid/services/database_service.dart';
+import 'package:motorqu_solid/services/notification_service.dart';
 import 'package:motorqu_solid/ui/widgets/empty_state.dart';
 import 'package:motorqu_solid/ui/widgets/filter_chip.dart';
 import 'package:motorqu_solid/ui/widgets/motor_card.dart';
 import 'package:motorqu_solid/ui/widgets/stat_item.dart';
+import 'package:solidui/solidui.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -14,16 +18,23 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => HomePageState();
 }
 
-class HomePageState extends State<HomePage> with RouteAware {
+class HomePageState extends State<HomePage>
+    with RouteAware, AutoRefreshMixin<HomePage> {
   String _filter = 'all'; // 'all', 'private', 'group'
   final _db = DatabaseService();
+  final AuthService _auth = AuthService();
+  final NotificationService _notif = NotificationService();
   List<Motorcycle> _motorcycles = [];
+  PodProfile? _podProfile;
+  bool _avatarLoadError = false;
   bool isLoading = true;
   ModalRoute<void>? _subscribedRoute;
 
   @override
   void initState() {
     super.initState();
+    solidProfileNotifier.addListener(_onPodProfileChanged);
+    _loadProfile();
     _loadMotorcycles();
   }
 
@@ -45,23 +56,68 @@ class HomePageState extends State<HomePage> with RouteAware {
     _loadMotorcycles();
   }
 
-  Future<void> refresh() => _loadMotorcycles();
+  void _onPodProfileChanged() {
+    if (mounted) {
+      _loadProfile();
+    }
+  }
+
+  Future<void> refresh() => Future.wait([_loadMotorcycles(), _loadProfile()]);
 
   @override
   void dispose() {
+    solidProfileNotifier.removeListener(_onPodProfileChanged);
     routeObserver.unsubscribe(this);
     super.dispose();
   }
 
-  Future<void> _loadMotorcycles() async {
+  Future<void> _loadProfile() async {
     try {
-      final motorcycles = await _db.motorcycle.getMotorcycles();
+      final profile = await _auth.loadPodProfile();
+      if (mounted) {
+        setState(() {
+          _podProfile = profile;
+          _avatarLoadError = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading pod profile: $e');
+    }
+  }
+
+  // Data keluarga lain diambil ulang tiap 2 menit selama tab Motor terlihat
+  // (sejalan dengan batas syncAccess), dan saat app aktif kembali.
+  @override
+  Duration get autoRefreshMaxAge => const Duration(minutes: 2);
+
+  @override
+  bool get isAutoRefreshVisible => mainTabIndex.value == 0;
+
+  @override
+  Future<void> autoRefresh() => _loadMotorcycles();
+
+  Future<void>? _motorcyclesInFlight;
+
+  /// Single-flight: refresh manual, didPopNext, dan auto-refresh yang
+  /// bersamaan memakai satu pemuatan yang sama.
+  Future<void> _loadMotorcycles() =>
+      _motorcyclesInFlight ??= _doLoadMotorcycles().whenComplete(
+        () => _motorcyclesInFlight = null,
+      );
+
+  Future<void> _doLoadMotorcycles() async {
+    try {
+      final motorcycles = await _db.getAllAccessibleMotorcycles();
+      if (motorcycles.isNotEmpty) {
+        _notif.syncReminders(motorcycles);
+      }
       if (mounted) {
         setState(() => _motorcycles = motorcycles);
       }
     } catch (e) {
       debugPrint('Error loading motorcycles: $e');
     } finally {
+      markLoaded();
       if (mounted) {
         setState(() => isLoading = false);
       }
@@ -81,8 +137,21 @@ class HomePageState extends State<HomePage> with RouteAware {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final displayName = 'Pengguna Demo';
+    final displayName = _podProfile?.displayName ?? 'Pengguna MotorQu';
     final firstName = displayName.split(' ').first;
+    final hasPhotoBytes =
+        _podProfile?.photoBytes != null && _podProfile!.photoBytes!.isNotEmpty;
+    final hasPhotoUrl =
+        !_avatarLoadError &&
+        _podProfile?.photoUrl != null &&
+        _podProfile!.photoUrl!.trim().isNotEmpty;
+
+    ImageProvider? avatarImage;
+    if (hasPhotoBytes) {
+      avatarImage = MemoryImage(_podProfile!.photoBytes!);
+    } else if (hasPhotoUrl) {
+      avatarImage = NetworkImage(_podProfile!.photoUrl!);
+    }
     final allMotos = _motorcycles;
 
     // Hitung ringkasan oli
@@ -107,7 +176,7 @@ class HomePageState extends State<HomePage> with RouteAware {
 
     return Scaffold(
       body: RefreshIndicator(
-        onRefresh: _loadMotorcycles,
+        onRefresh: refresh,
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
@@ -176,7 +245,21 @@ class HomePageState extends State<HomePage> with RouteAware {
                       CircleAvatar(
                         radius: 22,
                         backgroundColor: const Color(0xFFE3F2FD),
-                        backgroundImage: null,
+                        backgroundImage: avatarImage,
+                        onBackgroundImageError: avatarImage is NetworkImage
+                            ? (_, _) {
+                                if (mounted) {
+                                  setState(() => _avatarLoadError = true);
+                                }
+                              }
+                            : null,
+                        child: avatarImage == null
+                            ? const Icon(
+                                Icons.person_rounded,
+                                size: 24,
+                                color: Color(0xFF1976D2),
+                              )
+                            : null,
                       ),
                     ],
                   ),

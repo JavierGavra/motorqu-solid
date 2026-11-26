@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:motorqu_solid/services/database_service.dart';
+import 'package:motorqu_solid/ui/pages/join_group_scanner_page.dart';
 import 'package:motorqu_solid/ui/widgets/action_card.dart';
 
 void openActionSheet(BuildContext context) {
@@ -119,14 +120,21 @@ void openActionSheet(BuildContext context) {
                   const SizedBox(width: 12),
                   Expanded(
                     child: ActionCard(
-                      icon: Icons.login_rounded,
+                      icon: Icons.qr_code_scanner_rounded,
                       color: const Color(0xFF1976D2),
                       title: 'Masuk Grup',
-                      subtitle: 'Gabung pakai kode 6 digit',
+                      subtitle: 'Scan QR atau tempel kode',
                       isDark: isDark,
-                      onTap: () {
-                        // Navigator.pop(ctx);
-                        // _showJoinGroupDialog(context);
+                      onTap: () async {
+                        final navigator = Navigator.of(context);
+                        Navigator.pop(ctx);
+                        await navigator.push<String>(
+                          MaterialPageRoute<String>(
+                            builder: (_) => JoinGroupScannerPage(
+                              groupService: DatabaseService().group,
+                            ),
+                          ),
+                        );
                       },
                     ),
                   ),
@@ -201,51 +209,4 @@ Future<void> _showCreateGroupDialog(BuildContext context) async {
     }
   }
   debugPrint('Buat grup dengan nama: $name');
-}
-
-Future<void> _showJoinGroupDialog(BuildContext context) async {
-  final ctrl = TextEditingController();
-  final code = await showDialog<String>(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      title: const Row(
-        children: [
-          Icon(Icons.login_rounded, color: Color(0xFF1976D2)),
-          SizedBox(width: 8),
-          Text('Masuk ke Grup'),
-        ],
-      ),
-      content: TextField(
-        controller: ctrl,
-        textCapitalization: TextCapitalization.characters,
-        maxLength: 6,
-        decoration: const InputDecoration(
-          labelText: 'Kode Undangan (6 Karakter)',
-          hintText: 'contoh: ABC123',
-          border: OutlineInputBorder(),
-        ),
-        autofocus: true,
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(ctx),
-          child: const Text('Batal'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.pop(ctx, ctrl.text.trim().toUpperCase()),
-          style: FilledButton.styleFrom(
-            backgroundColor: const Color(0xFF1976D2),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-          ),
-          child: const Text('Gabung'),
-        ),
-      ],
-    ),
-  );
-
-  if (code == null || code.isEmpty) return;
-  debugPrint('Gabung grup dengan kode: $code');
 }

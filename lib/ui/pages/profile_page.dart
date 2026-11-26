@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:motorqu_solid/main.dart';
 import 'package:motorqu_solid/services/auth_service.dart';
+import 'package:motorqu_solid/services/database_service.dart';
+import 'package:motorqu_solid/services/notification_service.dart';
+import 'package:motorqu_solid/services/update_service.dart';
 import 'package:motorqu_solid/theme/app_theme.dart';
 import 'package:motorqu_solid/ui/pages/group_page.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -19,6 +22,8 @@ class ProfilePage extends StatefulWidget {
 
 class _ProfilePageState extends State<ProfilePage> {
   final AuthService _auth = AuthService();
+  final NotificationService _notif = NotificationService();
+  final UpdateService _update = UpdateService();
 
   PodProfile? _podProfile;
   List<SharedGroup> _sharedGroups = const [];
@@ -57,6 +62,7 @@ class _ProfilePageState extends State<ProfilePage> {
       final enabled = prefs.getBool('notifications_enabled') ?? true;
       if (mounted) {
         setState(() => _notifEnabled = enabled);
+        _notif.setEnabled(enabled);
       }
     } on Object catch (_) {}
 
@@ -106,14 +112,28 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Future<void> _toggleNotif(bool val) async {
     setState(() => _notifEnabled = val);
+    _notif.setEnabled(val);
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('notifications_enabled', val);
     } on Object catch (_) {}
 
     if (val) {
+      try {
+        final granted = await _notif.requestPermission();
+        if (!granted && mounted) {
+          _toast('Izin notifikasi belum diaktifkan di HP.');
+        }
+        if (DatabaseService.isInitialized) {
+          final motos = await DatabaseService().getAllAccessibleMotorcycles();
+          await _notif.syncReminders(motos, force: true);
+        }
+      } on Object catch (_) {}
       _toast('Pengingat ganti oli aktif');
     } else {
+      try {
+        await _notif.cancelAll();
+      } on Object catch (_) {}
       _toast('Pengingat dinonaktifkan');
     }
   }
@@ -140,10 +160,11 @@ class _ProfilePageState extends State<ProfilePage> {
         ),
         actions: [
           OutlinedButton.icon(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(ctx);
+              await _notif.showTestNotification();
               _toast(
-                'Fitur tes notifikasi akan tersedia setelah layanan notifikasi aktif.',
+                'Notifikasi uji coba dikirim! Periksa panel notifikasi HP.',
               );
             },
             icon: const Icon(Icons.send_rounded, size: 16),
@@ -164,8 +185,127 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  void _checkUpdate() {
-    _toast('Aplikasi Anda sudah versi terbaru (v$_version).');
+  Future<void> _checkUpdate() async {
+    final meta = await _update.checkForUpdate();
+    if (!mounted) return;
+    if (meta == null) {
+      _toast('Tidak dapat menghubungkan ke server update.');
+      return;
+    }
+    final newer = await _update.hasUpdate(meta);
+    if (!mounted) return;
+    if (!newer) {
+      _toast('Aplikasi Anda sudah versi terbaru (v$_version).');
+      return;
+    }
+    final targetVer = meta['versionName'] ?? meta['versionCode'];
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.system_update_rounded, color: AppTheme.primary),
+            SizedBox(width: 8),
+            Expanded(child: Text('Versi Baru Tersedia')),
+          ],
+        ),
+        content: Text(
+          'Versi v$targetVer siap diunduh. '
+          'Install APK baru sekarang?',
+          style: const TextStyle(height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppTheme.primary,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            child: const Text('Unduh & Install'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    var progress = 0.0;
+    var statusText = 'Menghubungkan...';
+    void Function(void Function())? dialogSetState;
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dlgContext) => StatefulBuilder(
+        builder: (context, setDlgState) {
+          dialogSetState = setDlgState;
+          return PopScope(
+            canPop: false,
+            child: AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              title: const Text('Mengunduh Pembaruan'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: LinearProgressIndicator(
+                      value: progress > 0 ? progress : null,
+                      minHeight: 8,
+                      backgroundColor: const Color(0xFFF1F5F9),
+                      valueColor: const AlwaysStoppedAnimation<Color>(
+                        AppTheme.primary,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    statusText,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: Color(0xFF475569),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+
+    String? errorMsg;
+    try {
+      errorMsg = await _update.downloadAndInstall(
+        targetVersionCode: meta['versionCode']?.toString(),
+        onProgress: (received, total, status) {
+          progress = total > 0 ? (received / total) : 0.0;
+          statusText = status;
+          dialogSetState?.call(() {});
+        },
+      );
+    } on Object catch (e) {
+      errorMsg = e.toString();
+    }
+
+    if (mounted) {
+      Navigator.of(context, rootNavigator: true).pop();
+      if (errorMsg != null) {
+        _toast('Gagal mengunduh: $errorMsg');
+      } else {
+        _toast('Installer dibuka. Silakan tekan Install.');
+      }
+    }
   }
 
   Future<void> _showPodDetailsDialog() async {
@@ -255,60 +395,6 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  void _onGroupTap() {
-    if (_sharedGroups.isEmpty) {
-      _toast('Halaman kelola grup keluarga belum tersedia.');
-      return;
-    }
-
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Row(
-          children: [
-            Icon(Icons.diversity_3_rounded, color: AppTheme.safeGreen),
-            SizedBox(width: 8),
-            Expanded(child: Text('Grup Keluarga Solid Pod')),
-          ],
-        ),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (final group in _sharedGroups)
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(
-                    Icons.group_rounded,
-                    color: AppTheme.primary,
-                  ),
-                  title: Text(
-                    group.name,
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  subtitle: Text('${group.webIds.length} anggota WebID'),
-                ),
-            ],
-          ),
-        ),
-        actions: [
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx),
-            style: FilledButton.styleFrom(
-              backgroundColor: AppTheme.primary,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-            child: const Text('Tutup'),
-          ),
-        ],
-      ),
-    );
-  }
-
   Future<void> _signOut() async {
     if (_isSigningOut) return;
 
@@ -347,6 +433,8 @@ class _ProfilePageState extends State<ProfilePage> {
     setState(() => _isSigningOut = true);
     try {
       await _auth.signOut();
+      await _notif.cancelAll();
+      DatabaseService.reset();
       if (mounted) {
         Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);
       }
@@ -360,14 +448,16 @@ class _ProfilePageState extends State<ProfilePage> {
 
   void _toast(String msg) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg),
-        backgroundColor: AppTheme.primary,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      ),
-    );
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(msg),
+          backgroundColor: AppTheme.primary,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
   }
 
   @override

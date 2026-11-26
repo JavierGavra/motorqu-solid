@@ -1,4 +1,4 @@
-package com.example.motorqu_solid
+package com.motorqu.solid
 
 import io.flutter.embedding.android.FlutterActivity
 

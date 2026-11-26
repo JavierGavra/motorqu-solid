@@ -1,7 +1,7 @@
 {
   "@context": "https://www.w3.org/ns/solid/oidc-context.jsonld",
   "client_id": "https://javiergavra.github.io/motorqu-solid/client-profile.jsonld",
-  "client_name": "Motorqu",
+  "client_name": "MotorQu",
   "application_type": "native",
   "redirect_uris": [
     "https://javiergavra.github.io/motorqu-solid/redirect.html",

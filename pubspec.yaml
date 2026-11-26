@@ -1,5 +1,5 @@
 name: motorqu_solid
-description: "A new Flutter project."
+description: "MotorQu Solid — pencatatan ganti oli motor keluarga, data tersimpan di Solid Pod."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.0+1
+version: 1.1.0+2
 
 environment:
   sdk: ^3.13.3
@@ -55,6 +55,8 @@ dependencies:
   uuid: ^4.6.0
   qr_flutter: ^4.1.0
   mobile_scanner: ^6.0.2
+  # Bagikan kode undangan grup lewat WhatsApp/chat (sudah ada di lock sebagai dependensi solidui)
+  share_plus: ^13.3.1
 
 dev_dependencies:
   flutter_test:
@@ -66,6 +68,22 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+
+  # Generator ikon launcher: `dart run flutter_launcher_icons`
+  flutter_launcher_icons: ^0.14.4
+
+# Ikon aplikasi Android (sama dengan MotorQu referensi). Sumber gambar ada di
+# tool/launcher/ agar tidak ikut dibundel ke APK sebagai aset.
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "tool/launcher/logomotorqu_legacy.png"
+  min_sdk_android: 21
+  adaptive_icon_background: "#0147C1"
+  adaptive_icon_foreground: "tool/launcher/logomotorqu_adaptive.png"
+  # Gambar foreground sudah full-bleed dengan logo di area aman; tanpa inset
+  # agar tidak muncul bingkai biru polos di sekeliling ikon.
+  adaptive_icon_foreground_inset: 0
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

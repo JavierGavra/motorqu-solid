@@ -27,7 +27,8 @@ class _LoginPageState extends State<LoginPage> {
   Future<void> _restoreSession() async {
     try {
       final session = await tryRestoreSession();
-      print('Session Solid berhasil dipulihkan: $session');
+      // Jangan cetak objek session: bisa berisi token akses.
+      debugPrint('Session Solid dipulihkan: ${session != null}');
       if (session != null) {
         await _initializeDatabaseService();
         if (!mounted) return;
@@ -127,7 +128,7 @@ class _LoginPageState extends State<LoginPage> {
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(16),
                     child: Image.asset(
-                      'logomotorqu.png',
+                      'assets/logomotorqu.png',
                       fit: BoxFit.contain,
                       errorBuilder: (context, error, stackTrace) => const Icon(
                         Icons.two_wheeler_rounded,

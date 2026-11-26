@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:motorqu_solid/models/family_group.dart';
 import 'package:motorqu_solid/models/motorcycle.dart';
 import 'package:motorqu_solid/services/database_service.dart';
+import 'package:motorqu_solid/services/notification_service.dart';
 
 /// Form Tambah / Edit Motor Modern (Sectioned Card & Segmented Ownership).
 class AddMotorPage extends StatefulWidget {
@@ -26,12 +28,25 @@ class _AddMotorPageState extends State<AddMotorPage> {
   late TextEditingController _initialKm;
 
   bool _isGroup = false;
-  List<dynamic> _userGroups = [];
+  List<FamilyGroup> _userGroups = [];
   String? _selectedGroupId;
-  bool _loadingGroup = false;
+  bool _loadingGroup = true;
   bool _saving = false;
 
   bool get _isEdit => widget.moto != null;
+
+  /// Grup motor yang sedang diedit ada di daftar grup user (terbaca).
+  bool _motorGroupKnown = false;
+
+  /// Hanya pemilik motor yang boleh memindahkan motor ke grup lain atau
+  /// menjadikannya pribadi, dan hanya bila grupnya saat ini bisa dimuat
+  /// (supaya motor tidak terpindah ke grup lain secara tidak sengaja).
+  bool get _canChangeOwnership {
+    if (!_isEdit) return true;
+    final m = widget.moto!;
+    if (m.createdBy != _db.webId) return false;
+    return !m.isGroupMotor || _motorGroupKnown;
+  }
 
   @override
   void initState() {
@@ -70,9 +85,11 @@ class _AddMotorPageState extends State<AddMotorPage> {
       setState(() {
         _userGroups = groups;
         _loadingGroup = false;
-        if (_isEdit &&
-            widget.moto!.isGroupMotor &&
-            groups.any((g) => g.id == widget.moto!.groupId)) {
+        _motorGroupKnown =
+            _isEdit && groups.any((g) => g.id == widget.moto!.groupId);
+        if (_isEdit && widget.moto!.isGroupMotor) {
+          // Pertahankan grup asli walau grupnya tidak termuat; formulir
+          // terkunci (lihat _canChangeOwnership), bukan pindah ke grup lain.
           _isGroup = true;
           _selectedGroupId = widget.moto!.groupId;
         } else if (groups.isNotEmpty) {
@@ -101,12 +118,15 @@ class _AddMotorPageState extends State<AddMotorPage> {
       }
 
       if (_isEdit) {
+        final existing = widget.moto!;
+        final wasGroup = existing.isGroupMotor;
+        final oldGroupId = existing.groupId;
         final plateText = _plate.text.trim();
         final yearText = _year.text.trim();
         final colorText = _color.text.trim();
 
-        final updatedMotor = widget.moto?.copyWith(
-          id: widget.moto!.id,
+        final updatedMotor = existing.copyWith(
+          id: existing.id,
           name: _name.text.trim(),
           brand: _brand.text.trim(),
           model: _model.text.trim(),
@@ -117,11 +137,34 @@ class _AddMotorPageState extends State<AddMotorPage> {
           clearYear: yearText.isEmpty,
           clearColor: colorText.isEmpty,
           reminderIntervalKm: interval,
-          groupId: targetGroupId,
-          isGroupMotor: _isGroup,
         );
 
-        await _db.motorcycle.updateMotorcycle(updatedMotor!);
+        await _db.motorcycle.updateMotorcycle(updatedMotor);
+
+        final wantsGroup = _isGroup && _selectedGroupId != null;
+        if (!_canChangeOwnership) {
+          // Bukan pemilik motor / grup tidak termuat: kepemilikan tidak diubah.
+        } else if (!wasGroup && wantsGroup) {
+          await _db.group.assignMotorcycleToGroup(
+            existing.id,
+            _selectedGroupId!,
+          );
+        } else if (wasGroup && !wantsGroup) {
+          await _db.group.removeMotorcycleFromGroup(
+            existing.id,
+            motorResourceUrl: existing.resourceUrl,
+          );
+        } else if (wasGroup && wantsGroup && oldGroupId != _selectedGroupId) {
+          await _db.group.removeMotorcycleFromGroup(
+            existing.id,
+            motorResourceUrl: existing.resourceUrl,
+          );
+          await _db.group.assignMotorcycleToGroup(
+            existing.id,
+            _selectedGroupId!,
+          );
+        }
+        NotificationService().resetSyncThrottle();
       } else {
         final moto = Motorcycle(
           id: '',
@@ -139,7 +182,7 @@ class _AddMotorPageState extends State<AddMotorPage> {
           createdAt: DateTime.now(),
         );
         await _db.motorcycle.addMotorcycle(moto);
-        print(moto.toTurtle());
+        NotificationService().resetSyncThrottle();
       }
 
       if (mounted) {
@@ -501,6 +544,67 @@ class _AddMotorPageState extends State<AddMotorPage> {
     );
   }
 
+  /// Ditampilkan saat kepemilikan tidak boleh diubah dari perangkat ini.
+  Widget _buildOwnershipLockedCard(
+    bool isDark,
+    Color cardBg,
+    Color borderColor,
+  ) {
+    final m = widget.moto!;
+    final isOwnMotor = m.createdBy == _db.webId;
+    final groupName = _userGroups
+        .where((g) => g.id == m.groupId)
+        .map((g) => g.name)
+        .firstOrNull;
+    final status = m.isGroupMotor
+        ? 'Motor grup${groupName != null ? ' "$groupName"' : ''}'
+        : 'Motor pribadi';
+    final reason = isOwnMotor
+        ? 'Data grup motor ini sedang tidak bisa dimuat. Coba lagi nanti '
+              'untuk memindahkan motor ke grup lain atau menjadikannya pribadi.'
+        : 'Hanya pemilik motor yang bisa memindahkan motor ini ke grup lain '
+              'atau menjadikannya pribadi. Data lain tetap bisa kamu ubah.';
+
+    return Container(
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: borderColor),
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.lock_outline_rounded, color: Color(0xFF64748B)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  status,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.white : const Color(0xFF0F172A),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  reason,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    height: 1.4,
+                    color: Color(0xFF64748B),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildOwnershipCard(bool isDark) {
     final cardBg = isDark ? const Color(0xFF1E293B) : Colors.white;
     final borderColor = isDark
@@ -509,6 +613,10 @@ class _AddMotorPageState extends State<AddMotorPage> {
     final unselectedBg = isDark
         ? const Color(0xFF0F172A)
         : const Color(0xFFF8FAFC);
+
+    if (_isEdit && !_loadingGroup && !_canChangeOwnership) {
+      return _buildOwnershipLockedCard(isDark, cardBg, borderColor);
+    }
 
     return Container(
       decoration: BoxDecoration(

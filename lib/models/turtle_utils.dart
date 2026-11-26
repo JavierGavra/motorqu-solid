@@ -1,4 +1,5 @@
 /// Utilitas Turtle bersama untuk model-model MotorQu.
+library;
 
 /// Namespace vocabulary buatan sendiri (predikat `moto:`).
 const motoNs = 'https://example.org/motorqu#'; // GANTI dengan milikmu

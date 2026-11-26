@@ -1,9 +1,16 @@
-name: Staging Build
+name: Staging Build & Release
 
 on:
   push:
-    branches: 
+    branches:
       - "main"
+    paths-ignore:
+      - 'README.md'
+      - '.gitignore'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
 
 jobs:
   build_app:
@@ -23,7 +30,17 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+          # Dikunci seperti CI tim agar build bisa direproduksi. 3.47.7 =
+          # versi yang dipakai menjalankan seluruh tes secara lokal.
+          flutter-version: 3.47.7
           cache: true
+
+      - name: 🏷️ Read Version from pubspec
+        id: ver
+        run: |
+          V=$(grep '^version:' pubspec.yaml | awk '{print $2}')
+          echo "name=${V%%+*}" >> "$GITHUB_OUTPUT"
+          echo "code=${V##*+}" >> "$GITHUB_OUTPUT"
 
       - name: ⬇️ Install Dependencies
         run: flutter pub get
@@ -31,8 +48,81 @@ jobs:
       - name: 🧪 Run Tests
         run: flutter test
 
+      # Keystore permanen dipulihkan dari secret. Tanpa ini setiap APK CI
+      # ditandatangani debug key yang berbeda-beda, sehingga auto-update
+      # ditolak Android (signature mismatch). Build sengaja digagalkan.
+      - name: 🔐 Restore Release Keystore
+        # Nama secret mengikuti konvensi tim (KEYSTORE_BASE64, dst).
+        # Dicek di dalam script karena env milik step sendiri tidak tersedia
+        # di `if:` step yang sama.
+        # Nama lama ANDROID_* (dari skrip versi awal) tetap diterima.
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 || secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS || secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          missing=""
+          [ -z "$KEYSTORE_BASE64" ] && missing="$missing KEYSTORE_BASE64"
+          [ -z "$KEYSTORE_PASSWORD" ] && missing="$missing KEYSTORE_PASSWORD"
+          [ -z "$KEY_ALIAS" ] && missing="$missing KEY_ALIAS"
+          [ -z "$KEY_PASSWORD" ] && missing="$missing KEY_PASSWORD"
+          if [ -n "$missing" ]; then
+            echo "::error::Secret signing belum diset:$missing. Jalankan scripts/create-release-keystore.ps1 lalu tambahkan secret di Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+          # storeFile relatif terhadap modul android/app (sama seperti CI tim).
+          echo "$KEYSTORE_BASE64" | base64 --decode > android/app/release.jks
+          {
+            echo "storeFile=release.jks"
+            echo "storePassword=$KEYSTORE_PASSWORD"
+            echo "keyAlias=$KEY_ALIAS"
+            echo "keyPassword=$KEY_PASSWORD"
+          } > android/key.properties
+          keytool -list -keystore android/app/release.jks \
+            -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" > /dev/null \
+            || { echo "::error::Keystore/alias/password dari secret tidak valid."; exit 1; }
+
       - name: 🗃️ Build APK
+        id: build_apk
         run: flutter build apk --release
+
+      - name: 🔏 Show Signing Certificate
+        run: |
+          # Fingerprint SHA-256 harus SAMA di setiap rilis. APK modern hanya
+          # memakai signature v2/v3, jadi pakai apksigner (bukan keytool).
+          APKSIGNER=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner
+          "$APKSIGNER" verify --print-certs build/app/outputs/flutter-apk/app-release.apk | grep -E "DN|SHA-256"
+
+      - name: 📝 Write Update Metadata
+        if: steps.build_apk.outcome == 'success'
+        run: |
+          mkdir -p release_assets
+          cat > release_assets/latest.json <<EOF
+          {
+            "versionName": "${{ steps.ver.outputs.name }}",
+            "versionCode": "${{ steps.ver.outputs.code }}",
+            "apkUrl": "https://github.com/JavierGavra/motorqu-solid/releases/latest/download/app-release.apk",
+            "notes": "Build otomatis ${GITHUB_SHA::7}",
+            "updatedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          }
+          EOF
+          cat release_assets/latest.json
+
+      - name: 🚀 Publish GitHub Release
+        if: steps.build_apk.outcome == 'success'
+        uses: softprops/action-gh-release@v2
+        with:
+          name: MotorQu Solid v${{ steps.ver.outputs.name }}
+          tag_name: v${{ steps.ver.outputs.name }}-${{ steps.ver.outputs.code }}
+          files: |
+            build/app/outputs/flutter-apk/app-release.apk
+            release_assets/latest.json
+          overwrite_files: true
+          make_latest: true
+          body: |
+            MotorQu Solid v${{ steps.ver.outputs.name }} (versionCode ${{ steps.ver.outputs.code }})
+            Unduh app-release.apk lalu install. Data tidak hilang.
 
       - name: ⬆️ Upload Artifact
         uses: actions/upload-artifact@v4

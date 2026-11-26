@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:motorqu_solid/services/group_service.dart';
+import 'package:motorqu_solid/services/invite_codec.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:share_plus/share_plus.dart';
 
 Future<void> showInviteQrDialog({
   required BuildContext context,
@@ -43,12 +47,55 @@ class InviteQrDialog extends StatefulWidget {
 class _InviteQrDialogState extends State<InviteQrDialog> {
   late Future<String> _qrPayloadFuture;
 
+  /// Host grup memproses permintaan bergabung berkala selama dialog terbuka,
+  /// sehingga anggota yang memindai QR langsung masuk.
+  Timer? _pollTimer;
+  bool _polling = false;
+  bool? _isHost;
+  int _joinedCount = 0;
+
   @override
   void initState() {
     super.initState();
     _qrPayloadFuture = widget.groupService.createInviteQrPayload(
       widget.groupId,
     );
+    _startPollingIfHost();
+  }
+
+  Future<void> _startPollingIfHost() async {
+    bool isHost;
+    try {
+      isHost = await widget.groupService.isHostOf(widget.groupId);
+    } catch (_) {
+      isHost = false;
+    }
+    if (!mounted) return;
+    setState(() => _isHost = isHost);
+    if (!isHost) return;
+
+    _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) async {
+      if (_polling) return;
+      _polling = true;
+      try {
+        final added = await widget.groupService.processJoinRequests(
+          widget.groupId,
+        );
+        if (added > 0 && mounted) {
+          setState(() => _joinedCount += added);
+        }
+      } catch (e) {
+        debugPrint('Gagal memproses permintaan bergabung: $e');
+      } finally {
+        _polling = false;
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _pollTimer?.cancel();
+    super.dispose();
   }
 
   void _regenerateQr() {
@@ -59,17 +106,36 @@ class _InviteQrDialogState extends State<InviteQrDialog> {
     });
   }
 
-  Future<void> _copyPayload(String payload) async {
-    await Clipboard.setData(ClipboardData(text: payload));
-    if (!mounted) {
-      return;
-    }
+  String _shareText(String payload) => InviteCodec.shareMessage(
+    groupName: widget.groupName,
+    payloadJson: payload,
+  );
+
+  /// Untuk anggota yang tidak berada di dekat HP ini: salin pesan berisi
+  /// kode undangan, lalu tempel di chat.
+  Future<void> _copyInvite(String payload) async {
+    await Clipboard.setData(ClipboardData(text: _shareText(payload)));
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Kode undangan disalin ke clipboard'),
+        content: Text('Pesan undangan disalin. Tempel di chat keluarga.'),
         duration: Duration(seconds: 2),
       ),
     );
+  }
+
+  Future<void> _shareInvite(String payload) async {
+    try {
+      await SharePlus.instance.share(
+        ShareParams(
+          text: _shareText(payload),
+          subject: 'Undangan grup MotorQu',
+        ),
+      );
+    } catch (e) {
+      // Bila lembar bagikan tidak tersedia, salin saja.
+      await _copyInvite(payload);
+    }
   }
 
   @override
@@ -106,7 +172,7 @@ class _InviteQrDialogState extends State<InviteQrDialog> {
                     CircularProgressIndicator(),
                     SizedBox(height: 16),
                     Text(
-                      'Menyiapkan QR & izin akses Pod...',
+                      'Menyiapkan QR undangan...',
                       textAlign: TextAlign.center,
                     ),
                   ],
@@ -163,20 +229,60 @@ class _InviteQrDialogState extends State<InviteQrDialog> {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  'Bagikan QR ini kepada anggota keluarga untuk bergabung ke "${widget.groupName}".',
+                  'Bagikan QR ini kepada anggota keluarga untuk bergabung ke "${widget.groupName}". QR hanya berlaku untuk satu orang.',
                   textAlign: TextAlign.center,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
-                // const SizedBox(height: 8),
-                // TextButton.icon(
-                //   onPressed: () {
-                //     _copyPayload(payload);
-                //   },
-                //   icon: const Icon(Icons.copy, size: 18),
-                //   label: const Text('Salin Data Undangan'),
-                // ),
+                const SizedBox(height: 10),
+                if (_isHost == true)
+                  Text(
+                    _joinedCount > 0
+                        ? '$_joinedCount anggota baru berhasil bergabung.'
+                        : 'Biarkan dialog ini terbuka sampai anggota selesai memindai.',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: _joinedCount > 0
+                          ? Colors.green.shade700
+                          : theme.colorScheme.primary,
+                    ),
+                  )
+                else if (_isHost == false)
+                  Text(
+                    'Anggota baru akan aktif setelah pembuat grup membuka aplikasi MotorQu.',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
+                const SizedBox(height: 12),
+                Text(
+                  'Anggota tidak di dekat Anda? Kirim kodenya lewat chat:',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    TextButton.icon(
+                      onPressed: () => _copyInvite(payload),
+                      icon: const Icon(Icons.copy_rounded, size: 18),
+                      label: const Text('Salin'),
+                    ),
+                    const SizedBox(width: 4),
+                    FilledButton.tonalIcon(
+                      onPressed: () => _shareInvite(payload),
+                      icon: const Icon(Icons.share_rounded, size: 18),
+                      label: const Text('Bagikan'),
+                    ),
+                  ],
+                ),
               ],
             );
           },

@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:motorqu_solid/services/group_service.dart';
+import 'package:motorqu_solid/services/invite_codec.dart';
+import 'package:motorqu_solid/ui/widgets/group/group_dialogs.dart';
 
+/// Gabung grup: scan QR (anggota di dekat pembuat grup) atau tempel kode
+/// undangan yang dikirim lewat chat (anggota di tempat lain).
 class JoinGroupScannerPage extends StatefulWidget {
   const JoinGroupScannerPage({super.key, required this.groupService});
 
@@ -20,6 +24,7 @@ class _JoinGroupScannerPageState extends State<JoinGroupScannerPage> {
   );
 
   bool _isProcessing = false;
+  bool _fromPaste = false;
   bool _isTorchOn = false;
 
   @override
@@ -46,43 +51,83 @@ class _JoinGroupScannerPageState extends State<JoinGroupScannerPage> {
       return;
     }
 
+    await _join(rawValue, fromPaste: false);
+  }
+
+  Future<void> _pasteInvite() async {
+    if (_isProcessing) return;
+    final text = await showPasteInviteDialog(context);
+    if (text == null || text.trim().isEmpty || !mounted) return;
+
+    final payload = InviteCodec.decode(text);
+    if (payload == null) {
+      _showError(
+        'Kode undangan tidak dikenali. Pastikan menempel pesan undangan '
+        'MotorQu utuh (berisi kode yang diawali "${InviteCodec.prefix}").',
+      );
+      return;
+    }
+    await _join(payload, fromPaste: true);
+  }
+
+  Future<void> _join(String raw, {required bool fromPaste}) async {
     setState(() {
       _isProcessing = true;
+      _fromPaste = fromPaste;
     });
 
     await _scannerController.stop();
 
     try {
-      final joinedGroupId = await widget.groupService.joinGroupWithQr(rawValue);
+      final outcome = await widget.groupService.joinGroupWithQr(
+        raw,
+        approvalWait: fromPaste
+            ? const Duration(seconds: 4)
+            : const Duration(seconds: 20),
+      );
 
       if (!mounted) {
         return;
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Berhasil bergabung ke grup!')),
+        SnackBar(
+          duration: Duration(seconds: outcome.pending ? 6 : 3),
+          content: Text(
+            outcome.pending
+                ? 'Permintaan bergabung terkirim. Grup akan muncul otomatis '
+                      'setelah pembuat grup membuka aplikasi MotorQu.'
+                : 'Berhasil bergabung ke grup!',
+          ),
+        ),
       );
 
-      // Langsung kembali ke halaman Grup sambil membawa ID grup baru
-      Navigator.of(context).pop<String>(joinedGroupId);
+      // Kembali ke halaman Grup. Grup yang masih menunggu persetujuan
+      // belum bisa dipilih, jadi kembalikan null.
+      Navigator.of(
+        context,
+      ).pop<String>(outcome.pending ? null : outcome.groupId);
     } catch (e) {
       if (!mounted) {
         return;
       }
 
-      final cleanMessage = e.toString().replaceFirst('Exception: ', '');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(cleanMessage),
-          backgroundColor: Theme.of(context).colorScheme.error,
-        ),
-      );
+      _showError(e.toString().replaceFirst('Exception: ', ''));
 
       setState(() {
         _isProcessing = false;
       });
       await _scannerController.start();
     }
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Theme.of(context).colorScheme.error,
+      ),
+    );
   }
 
   Future<void> _toggleTorch() async {
@@ -98,7 +143,7 @@ class _JoinGroupScannerPageState extends State<JoinGroupScannerPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Scan QR Gabung Grup'),
+        title: const Text('Gabung Grup'),
         actions: [
           IconButton(
             onPressed: _isProcessing ? null : _toggleTorch,
@@ -126,26 +171,43 @@ class _JoinGroupScannerPageState extends State<JoinGroupScannerPage> {
             ),
           ),
 
-          // Petunjuk di bagian bawah layar
+          // Petunjuk + opsi tempel kode di bagian bawah layar
           if (!_isProcessing)
             Positioned(
               left: 24,
               right: 24,
-              bottom: 48,
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.7),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Text(
-                  'Arahkan kamera ke QR Code undangan dari admin grup',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.white),
-                ),
+              bottom: 40,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.7),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Text(
+                      'Arahkan kamera ke QR Code undangan dari admin grup',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.white),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  FilledButton.icon(
+                    onPressed: _pasteInvite,
+                    icon: const Icon(Icons.content_paste_rounded),
+                    label: const Text('Tempel Kode Undangan'),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(48),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
 
@@ -159,20 +221,23 @@ class _JoinGroupScannerPageState extends State<JoinGroupScannerPage> {
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
                   ),
-                  child: const Padding(
-                    padding: EdgeInsets.all(24),
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        CircularProgressIndicator(),
-                        SizedBox(height: 16),
-                        Text(
+                        const CircularProgressIndicator(),
+                        const SizedBox(height: 16),
+                        const Text(
                           'Memproses undangan grup...',
                           style: TextStyle(fontWeight: FontWeight.w600),
                         ),
-                        SizedBox(height: 6),
+                        const SizedBox(height: 6),
                         Text(
-                          'Menyinkronkan data dengan Solid Pod',
+                          _fromPaste
+                              ? 'Mengirim permintaan ke pembuat grup'
+                              : 'Menunggu persetujuan pembuat grup '
+                                    '(biarkan QR tetap terbuka di HP-nya)',
                           textAlign: TextAlign.center,
                         ),
                       ],

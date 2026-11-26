@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:motorqu_solid/models/family_group.dart';
+import 'package:motorqu_solid/services/app_refresh.dart';
 import 'package:motorqu_solid/services/database_service.dart';
 import 'package:motorqu_solid/ui/pages/join_group_scanner_page.dart';
 import 'package:motorqu_solid/ui/widgets/group/group_actions_menu.dart';
@@ -26,9 +27,10 @@ class GroupPage extends StatefulWidget {
   State<GroupPage> createState() => _GroupPageState();
 }
 
-class _GroupPageState extends State<GroupPage> {
+class _GroupPageState extends State<GroupPage>
+    with AutoRefreshMixin<GroupPage> {
   final DatabaseService _db = DatabaseService();
-  final String _myUid = "";
+  String get _myUid => _db.webId;
 
   late Future<List<FamilyGroup>> _groupsFuture;
   String? _selectedGroupId;
@@ -38,7 +40,19 @@ class _GroupPageState extends State<GroupPage> {
   void initState() {
     super.initState();
     _groupsFuture = _db.group.getUserGroupsList();
+    _groupsFuture.then((_) => markLoaded(), onError: (_) {});
   }
+
+  // Anggota baru / motor yang dibagikan anggota lain muncul tanpa
+  // pull-to-refresh. Tidak berjalan saat aksi grup sedang diproses.
+  @override
+  Duration get autoRefreshMaxAge => const Duration(minutes: 2);
+
+  @override
+  bool get isAutoRefreshVisible => !_isLoading;
+
+  @override
+  Future<void> autoRefresh() => _refreshGroups();
 
   Future<void> _refreshGroups() async {
     final future = _db.group.getUserGroupsList();
@@ -48,6 +62,7 @@ class _GroupPageState extends State<GroupPage> {
       });
     }
     await future;
+    markLoaded();
   }
 
   Future<T> _withLoading<T>(Future<T> Function() action) async {
@@ -147,8 +162,8 @@ class _GroupPageState extends State<GroupPage> {
           ? 'Hapus/Tinggalkan Grup'
           : (isOwner ? 'Keluar dari Grup (Owner)' : 'Keluar dari Grup'),
       message: isCreator
-          ? 'Anda adalah pembuat utama grup "${group.name}". Jika Anda keluar, '
-                'kepemilikan akan dialihkan atau grup akan ditutup jika tidak ada anggota lain.'
+          ? 'Anda adalah pembuat utama grup "${group.name}" dan data grup tersimpan di Pod Anda. '
+                'Anda hanya bisa keluar setelah semua anggota lain dikeluarkan; grup lalu dihapus.'
           : (isOwner
                 ? 'Anda adalah salah satu owner di grup "${group.name}". Jika keluar, status owner Anda akan dilepas dan motor Anda otomatis ditarik kembali ke motor pribadi.'
                 : 'Motor milik Anda yang dibagikan ke grup "${group.name}" akan otomatis '
@@ -221,7 +236,10 @@ class _GroupPageState extends State<GroupPage> {
 
     try {
       await _withLoading(() async {
-        await _db.group.removeMotorcycleFromGroup(moto.id);
+        await _db.group.removeMotorcycleFromGroup(
+          moto.id,
+          motorResourceUrl: moto.resourceUrl,
+        );
       });
       _toast('Motor "${moto.name}" telah dikembalikan ke motor pribadi');
       await _refreshGroups();
@@ -363,7 +381,9 @@ class _GroupPageState extends State<GroupPage> {
             child: FutureBuilder<List<FamilyGroup>>(
               future: _groupsFuture,
               builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
+                // Spinner hanya saat belum ada data: auto-refresh tidak berkedip.
+                if (snapshot.connectionState == ConnectionState.waiting &&
+                    !snapshot.hasData) {
                   return const _RefreshableLoading();
                 }
                 final groups = snapshot.data ?? [];
@@ -435,6 +455,8 @@ class _GroupPageState extends State<GroupPage> {
         ),
         const SizedBox(height: 24),
         GroupMotorSection(
+          // Key per grup: ganti grup = state baru (tanpa data grup lama).
+          key: ValueKey('motors-${active.id}'),
           motorcyclesFuture: _db.group.getGroupMotorcycles(active.id),
           myUid: _myUid,
           isOwner: isOwner,
@@ -443,6 +465,7 @@ class _GroupPageState extends State<GroupPage> {
         ),
         const SizedBox(height: 24),
         GroupMemberSection(
+          key: ValueKey('members-${active.id}'),
           group: active,
           membersFuture: _db.group.getGroupMembers(active),
           currentUserId: _myUid,

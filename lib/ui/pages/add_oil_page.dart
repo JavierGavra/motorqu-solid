@@ -5,6 +5,7 @@ import 'package:motorqu_solid/models/motorcycle.dart';
 import 'package:motorqu_solid/models/oil_record.dart';
 import 'package:motorqu_solid/services/auth_service.dart';
 import 'package:motorqu_solid/services/database_service.dart';
+import 'package:motorqu_solid/services/notification_service.dart';
 import 'package:motorqu_solid/ui/pages/add_motor_page.dart';
 
 /// Form pencatatan ganti oli modern berbasis Solid Pod.
@@ -43,7 +44,7 @@ class _AddOilPageState extends State<AddOilPage> {
 
   Future<void> _loadMotos() async {
     try {
-      final motos = await _db.motorcycle.getMotorcycles();
+      final motos = await _db.getAllAccessibleMotorcycles();
       if (mounted) {
         setState(() {
           _motos = motos;
@@ -117,7 +118,11 @@ class _AddOilPageState extends State<AddOilPage> {
         createdAt: DateTime.now(),
       );
 
-      await _db.oil.addOilRecord(moto.id, record);
+      await _db.oil.addOilRecord(
+        moto.id,
+        record,
+        motorResourceUrl: moto.resourceUrl,
+      );
 
       try {
         await _scheduleReminder(moto, km);
@@ -133,9 +138,16 @@ class _AddOilPageState extends State<AddOilPage> {
     }
   }
 
-  /// Placeholder pengingat notifikasi (siap dihubungkan ketika NotificationService aktif)
   Future<void> _scheduleReminder(Motorcycle moto, int km) async {
-    // TODO: Terhubung dengan modul Notifikasi tim ketika sudah siap.
+    final target = km + moto.reminderIntervalKm;
+    await NotificationService().scheduleOilReminder(
+      motorId: moto.id,
+      title: 'Cek oli ${moto.name}',
+      body:
+          'Jika KM motor ${moto.name} sudah lebih dari ${NumberFormat('#,###').format(target)}KM, '
+          'jangan lupa ganti oli yaa',
+      performedAt: _tanggal,
+    );
   }
 
   void _toast(String msg) {

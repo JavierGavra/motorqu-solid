@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:motorqu_solid/models/motorcycle.dart';
 import 'package:motorqu_solid/models/oil_record.dart';
+import 'package:motorqu_solid/services/app_refresh.dart';
 import 'package:motorqu_solid/services/database_service.dart';
+import 'package:motorqu_solid/services/notification_service.dart';
 import 'package:motorqu_solid/ui/pages/add_motor_page.dart';
 import 'package:motorqu_solid/ui/pages/add_oil_page.dart';
 
@@ -14,10 +16,52 @@ class MotorDetailPage extends StatefulWidget {
   State<MotorDetailPage> createState() => _MotorDetailPageState();
 }
 
-class _MotorDetailPageState extends State<MotorDetailPage> {
+class _MotorDetailPageState extends State<MotorDetailPage>
+    with AutoRefreshMixin<MotorDetailPage> {
   final DatabaseService _db = DatabaseService();
+  final NotificationService _notif = NotificationService();
 
-  Future<void> _deleteOilRecord(OilRecord r) async {
+  // Future disimpan di state (bukan dibuat di build) supaya rebuild biasa
+  // tidak memicu request ke Pod. Muat ulang lewat [_reload].
+  late Future<Motorcycle?> _motoFuture;
+  late Future<List<OilRecord>> _recordsFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _reload();
+  }
+
+  /// Ambil ulang data motor & riwayat oli. Panggil di dalam setState.
+  void _reload() {
+    final motorId = widget.motorcycle.id;
+    final resourceUrl = widget.motorcycle.resourceUrl;
+    _motoFuture = _db.motorcycle.getMotorcycle(
+      motorId,
+      resourceUrl: resourceUrl,
+    );
+    _recordsFuture = _db.oil.getOilRecords(
+      motorId,
+      motorResourceUrl: resourceUrl,
+    );
+    Future.wait<Object?>([_motoFuture, _recordsFuture])
+        .then((_) => markLoaded(), onError: (_) {});
+  }
+
+  Future<void> _refreshNow() async {
+    setState(_reload);
+    await Future.wait<Object?>([_motoFuture, _recordsFuture]);
+  }
+
+  // Detail motor = tempat paling sering melihat catatan anggota lain,
+  // jadi diperbarui lebih sering daripada beranda.
+  @override
+  Duration get autoRefreshMaxAge => const Duration(seconds: 45);
+
+  @override
+  Future<void> autoRefresh() => _refreshNow();
+
+  Future<void> _deleteOilRecord(Motorcycle moto, OilRecord r) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -53,9 +97,22 @@ class _MotorDetailPageState extends State<MotorDetailPage> {
     );
     if (ok != true) return;
     try {
-      await _db.oil.deleteOilRecord(widget.motorcycle.id, r.id);
+      await _db.oil.deleteOilRecord(
+        moto.id,
+        r.id,
+        motorResourceUrl: moto.resourceUrl,
+      );
+      try {
+        final refreshed = await _db.motorcycle.getMotorcycle(
+          moto.id,
+          resourceUrl: moto.resourceUrl,
+        );
+        if (refreshed != null) {
+          await _notif.syncReminders([refreshed], force: true);
+        }
+      } catch (_) {}
       if (mounted) {
-        setState(() {});
+        setState(_reload);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Catatan oli berhasil dihapus'),
@@ -107,6 +164,7 @@ class _MotorDetailPageState extends State<MotorDetailPage> {
     );
     if (ok != true) return;
     await _db.motorcycle.deleteMotorcycle(moto.id);
+    await _notif.cancelForMotor(moto.id);
     if (mounted) Navigator.pop(context);
   }
 
@@ -123,7 +181,7 @@ class _MotorDetailPageState extends State<MotorDetailPage> {
     final myWebId = _db.webId;
 
     return FutureBuilder<Motorcycle?>(
-      future: _db.motorcycle.getMotorcycle(widget.motorcycle.id),
+      future: _motoFuture,
       builder: (context, motoSnap) {
         final moto = motoSnap.data ?? widget.motorcycle;
         final isCreator = moto.createdBy == myWebId;
@@ -185,25 +243,26 @@ class _MotorDetailPageState extends State<MotorDetailPage> {
                   ),
                 ),
                 tooltip: 'Edit Motor',
-                onPressed: () {
-                  Navigator.push(
+                onPressed: () async {
+                  final updated = await Navigator.push<bool>(
                     context,
                     MaterialPageRoute(builder: (_) => AddMotorPage(moto: moto)),
                   );
+                  if (updated == true && mounted) {
+                    setState(_reload);
+                  }
                 },
               ),
               const SizedBox(width: 8),
             ],
           ),
           body: FutureBuilder<List<OilRecord>>(
-            future: _db.oil.getOilRecords(moto.id),
+            future: _recordsFuture,
             builder: (context, snapshot) {
               final records = snapshot.data ?? [];
 
               return RefreshIndicator(
-                onRefresh: () async {
-                  setState(() {});
-                },
+                onRefresh: _refreshNow,
                 child: ListView(
                   physics: const AlwaysScrollableScrollPhysics(),
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
@@ -226,7 +285,7 @@ class _MotorDetailPageState extends State<MotorDetailPage> {
                   const SizedBox(height: 24),
 
                   // 3. RIWAYAT OLI TIMELINE DENGAN DELTA KM (Mercedes-Benz & NRC style)
-                  _buildTimelineSection(records, isDark),
+                  _buildTimelineSection(moto, records, isDark),
 
                   const SizedBox(height: 24),
 
@@ -588,7 +647,7 @@ class _MotorDetailPageState extends State<MotorDetailPage> {
               ),
             );
             if (updated == true && mounted) {
-              setState(() {});
+              setState(_reload);
             }
           },
           child: const Padding(
@@ -622,7 +681,11 @@ class _MotorDetailPageState extends State<MotorDetailPage> {
   }
 
   /// 3. Timeline Riwayat Oli dengan Delta KM
-  Widget _buildTimelineSection(List<OilRecord> records, bool isDark) {
+  Widget _buildTimelineSection(
+    Motorcycle moto,
+    List<OilRecord> records,
+    bool isDark,
+  ) {
     final textPrimary = isDark
         ? const Color(0xFFF8FAFC)
         : const Color(0xFF0F172A);
@@ -842,7 +905,7 @@ class _MotorDetailPageState extends State<MotorDetailPage> {
                                     ],
                                   ),
                                   InkWell(
-                                    onTap: () => _deleteOilRecord(r),
+                                    onTap: () => _deleteOilRecord(moto, r),
                                     borderRadius: BorderRadius.circular(8),
                                     child: Padding(
                                       padding: const EdgeInsets.all(4),

@@ -52,7 +52,7 @@ class GroupMotorSection extends StatelessWidget {
         FutureBuilder<List<Motorcycle>>(
           future: motorcyclesFuture,
           builder: (context, snap) {
-            if (snap.connectionState == ConnectionState.waiting) {
+            if (snap.connectionState == ConnectionState.waiting && !snap.hasData) {
               return const InlineLoading();
             }
             final motos = snap.data ?? [];

@@ -15,6 +15,9 @@ class Motorcycle {
   final String createdBy;
   final DateTime createdAt;
 
+  /// URL penuh file `motorcycle.ttl` di Solid Pod (runtime-only, tidak ditulis ke .ttl).
+  final String? resourceUrl;
+
   Motorcycle({
     required this.id,
     required this.name,
@@ -31,6 +34,7 @@ class Motorcycle {
     this.memberUids = const [],
     required this.createdBy,
     required this.createdAt,
+    this.resourceUrl,
   });
 
   /// Target KM berikutnya: lastOdometer + reminderIntervalKm
@@ -58,10 +62,12 @@ class Motorcycle {
     List<String>? memberUids,
     String? createdBy,
     DateTime? createdAt,
+    String? resourceUrl,
     bool clearPlate = false,
     bool clearYear = false,
     bool clearColor = false,
     bool clearLastServiceAt = false,
+    bool clearResourceUrl = false,
   }) {
     return Motorcycle(
       id: id ?? this.id,
@@ -81,6 +87,7 @@ class Motorcycle {
       memberUids: memberUids ?? this.memberUids,
       createdBy: createdBy ?? this.createdBy,
       createdAt: createdAt ?? this.createdAt,
+      resourceUrl: clearResourceUrl ? null : (resourceUrl ?? this.resourceUrl),
     );
   }
 

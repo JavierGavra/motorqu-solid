@@ -1,11 +1,11 @@
 {
-    "name": "motorqu_solid",
-    "short_name": "motorqu_solid",
+    "name": "MotorQu",
+    "short_name": "MotorQu",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "Pencatatan ganti oli motor keluarga, data tersimpan di Solid Pod.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

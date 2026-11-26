@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:motorqu_solid/navigation_observer.dart';
+import 'package:motorqu_solid/services/app_refresh.dart';
+import 'package:motorqu_solid/services/notification_service.dart';
 import 'package:motorqu_solid/ui/pages/home_page.dart';
 import 'package:motorqu_solid/ui/pages/profile_page.dart';
 import 'package:motorqu_solid/ui/widgets/action_bottom_sheet.dart';
@@ -14,8 +17,37 @@ class _BottomNavigationState extends State<BottomNavigation> {
   int _index = 0; // 0 = Motor, 1 = Profil
   final _homePageKey = GlobalKey<HomePageState>();
 
+  @override
+  void initState() {
+    super.initState();
+    mainTabIndex.value = _index;
+    // Muat ulang otomatis saat app aktif kembali / berkala (pengganti
+    // realtime). Hanya berjalan selama user login (layar ini tampil).
+    AppRefresh.instance.start();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _consumePendingNotification();
+    });
+  }
+
+  @override
+  void dispose() {
+    AppRefresh.instance.stop();
+    super.dispose();
+  }
+
+  void _consumePendingNotification() {
+    final pendingMotorId = NotificationService().consumePendingMotorId();
+    if (pendingMotorId == null || pendingMotorId.isEmpty || !mounted) return;
+    Navigator.pushNamed(context, '/addOil', arguments: pendingMotorId).then((_) {
+      if (mounted) {
+        _homePageKey.currentState?.refresh();
+      }
+    });
+  }
+
   void _showTab(int index) {
     setState(() => _index = index);
+    mainTabIndex.value = index;
     if (index == 0) {
       _homePageKey.currentState?.refresh();
     }

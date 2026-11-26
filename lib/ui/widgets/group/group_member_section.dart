@@ -47,7 +47,7 @@ class GroupMemberSection extends StatelessWidget {
         FutureBuilder<List<Map<String, dynamic>>>(
           future: membersFuture,
           builder: (context, snap) {
-            if (snap.connectionState == ConnectionState.waiting) {
+            if (snap.connectionState == ConnectionState.waiting && !snap.hasData) {
               return const InlineLoading();
             }
             final members = snap.data ?? [];

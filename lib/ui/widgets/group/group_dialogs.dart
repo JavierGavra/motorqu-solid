@@ -77,16 +77,61 @@ Future<String?> showCreateGroupDialog(BuildContext context) {
   );
 }
 
-Future<String?> showJoinGroupDialog(BuildContext context) {
-  return _showTextInputDialog(
-    context,
-    title: _iconTitle(Icons.login_rounded, 'Gabung Garasi Grup'),
-    label: 'Kode Undangan (6 Karakter)',
-    hint: 'contoh: ABC123',
-    confirmLabel: 'Gabung',
-    capitalization: TextCapitalization.characters,
-    maxLength: 6,
-    transform: (s) => s.toUpperCase(),
+/// Dialog menempel pesan/kode undangan yang dikirim lewat chat.
+/// Mengembalikan teks mentah (di-decode oleh InviteCodec) atau null.
+Future<String?> showPasteInviteDialog(BuildContext context) {
+  final ctrl = TextEditingController();
+  return showDialog<String>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      shape: _dialogShape,
+      title: _iconTitle(Icons.login_rounded, 'Tempel Kode Undangan'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'Tempel pesan undangan MotorQu yang kamu terima lewat chat. '
+            'Pesan utuh boleh, tidak perlu dipotong.',
+            style: TextStyle(fontSize: 13, height: 1.4),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: ctrl,
+            autofocus: true,
+            minLines: 3,
+            maxLines: 5,
+            decoration: const InputDecoration(
+              hintText: 'MQ1-...',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: () async {
+                final data = await Clipboard.getData(Clipboard.kTextPlain);
+                final text = data?.text;
+                if (text != null) ctrl.text = text;
+              },
+              icon: const Icon(Icons.content_paste_rounded, size: 18),
+              label: const Text('Tempel dari clipboard'),
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text('Batal'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(ctx, ctrl.text),
+          style: groupFilledStyle(GroupPalette.primary),
+          child: const Text('Gabung'),
+        ),
+      ],
+    ),
   );
 }
 
@@ -151,110 +196,6 @@ Future<void> showNoPrivateMotorDialog(BuildContext context) {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(ctx),
-          child: const Text('Tutup'),
-        ),
-      ],
-    ),
-  );
-}
-
-/// Dialog kode undangan. [onCopied] dipanggil setelah kode disalin dan
-/// dialog ditutup (misalnya untuk menampilkan toast).
-Future<void> showInviteCodeDialog(
-  BuildContext context, {
-  required String groupName,
-  required String code,
-  required VoidCallback onCopied,
-}) {
-  final isDark = Theme.of(context).brightness == Brightness.dark;
-  final cardBg = isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC);
-  final textSecondary =
-      isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569);
-
-  return showDialog<void>(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      title: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: GroupPalette.primary.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(
-              Icons.confirmation_number_rounded,
-              color: GroupPalette.primary,
-            ),
-          ),
-          const SizedBox(width: 12),
-          const Text('Kode Undangan'),
-        ],
-      ),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            'Bagikan kode 6 karakter ini kepada anggota keluarga untuk bergabung ke "$groupName".',
-            style: TextStyle(fontSize: 13, height: 1.4, color: textSecondary),
-          ),
-          const SizedBox(height: 20),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-            decoration: BoxDecoration(
-              color: cardBg,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: GroupPalette.primary.withValues(alpha: 0.4),
-                width: 1.5,
-              ),
-            ),
-            child: Column(
-              children: [
-                Text(
-                  'KODE GABUNG',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 2,
-                    color: textSecondary,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  code,
-                  style: const TextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 6,
-                    color: GroupPalette.primary,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'Berlaku 7 hari • Sekali pakai',
-                  style: TextStyle(fontSize: 11, color: textSecondary),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-      actions: [
-        TextButton.icon(
-          onPressed: () {
-            Clipboard.setData(ClipboardData(text: code));
-            Navigator.pop(ctx);
-            onCopied();
-          },
-          icon: const Icon(Icons.copy_rounded, size: 18),
-          label: const Text('Salin Kode'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.pop(ctx),
-          style: groupFilledStyle(GroupPalette.primary),
           child: const Text('Tutup'),
         ),
       ],
