@@ -67,7 +67,7 @@ class NoGroupView extends StatelessWidget {
                   OutlinedButton.icon(
                     onPressed: onJoin,
                     icon: const Icon(Icons.login_rounded),
-                    label: const Text('Gabung Pakai Kode 6 Digit'),
+                    label: const Text('Gabung Pakai Kode / QR'),
                     style: OutlinedButton.styleFrom(
                       minimumSize: const Size(double.infinity, 48),
                       shape: RoundedRectangleBorder(

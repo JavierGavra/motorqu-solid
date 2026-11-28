@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:motorqu_solid/services/group_service.dart';
-import 'package:motorqu_solid/services/invite_codec.dart';
 import 'package:motorqu_solid/ui/widgets/group/group_dialogs.dart';
 
 /// Gabung grup: scan QR (anggota di dekat pembuat grup) atau tempel kode
@@ -54,20 +53,11 @@ class _JoinGroupScannerPageState extends State<JoinGroupScannerPage> {
     await _join(rawValue, fromPaste: false);
   }
 
-  Future<void> _pasteInvite() async {
+  Future<void> _enterCode() async {
     if (_isProcessing) return;
-    final text = await showPasteInviteDialog(context);
+    final text = await showEnterInviteCodeDialog(context);
     if (text == null || text.trim().isEmpty || !mounted) return;
-
-    final payload = InviteCodec.decode(text);
-    if (payload == null) {
-      _showError(
-        'Kode undangan tidak dikenali. Pastikan menempel pesan undangan '
-        'MotorQu utuh (berisi kode yang diawali "${InviteCodec.prefix}").',
-      );
-      return;
-    }
-    await _join(payload, fromPaste: true);
+    await _join(text, fromPaste: true);
   }
 
   Future<void> _join(String raw, {required bool fromPaste}) async {
@@ -76,37 +66,42 @@ class _JoinGroupScannerPageState extends State<JoinGroupScannerPage> {
       _fromPaste = fromPaste;
     });
 
-    await _scannerController.stop();
+    try {
+      await _scannerController.stop();
+    } catch (_) {
+      // Kamera memang belum jalan (mis. izin ditolak): tetap lanjut.
+    }
 
     try {
-      final outcome = await widget.groupService.joinGroupWithQr(
+      final outcome = await widget.groupService.joinGroup(
         raw,
-        approvalWait: fromPaste
-            ? const Duration(seconds: 4)
-            : const Duration(seconds: 20),
+        // Scan QR: pembuat grup biasanya sedang membuka QR-nya, jadi akses
+        // terbuka dalam beberapa detik. Kode lewat chat: cek singkat saja.
+        wait: fromPaste
+            ? const Duration(seconds: 6)
+            : const Duration(seconds: 12),
       );
 
       if (!mounted) {
         return;
       }
 
+      final name = outcome.groupName.isEmpty
+          ? 'grup'
+          : 'grup "${outcome.groupName}"';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           duration: Duration(seconds: outcome.pending ? 6 : 3),
           content: Text(
             outcome.pending
-                ? 'Permintaan bergabung terkirim. Grup akan muncul otomatis '
-                      'setelah pembuat grup membuka aplikasi MotorQu.'
-                : 'Berhasil bergabung ke grup!',
+                ? 'Berhasil bergabung ke $name! Data grup sedang disinkronkan '
+                      'dan muncul otomatis saat HP pembuat grup membuka MotorQu.'
+                : 'Berhasil bergabung ke $name!',
           ),
         ),
       );
 
-      // Kembali ke halaman Grup. Grup yang masih menunggu persetujuan
-      // belum bisa dipilih, jadi kembalikan null.
-      Navigator.of(
-        context,
-      ).pop<String>(outcome.pending ? null : outcome.groupId);
+      Navigator.of(context).pop<String>(outcome.groupId);
     } catch (e) {
       if (!mounted) {
         return;
@@ -117,7 +112,7 @@ class _JoinGroupScannerPageState extends State<JoinGroupScannerPage> {
       setState(() {
         _isProcessing = false;
       });
-      await _scannerController.start();
+      await _restartCamera();
     }
   }
 
@@ -131,10 +126,26 @@ class _JoinGroupScannerPageState extends State<JoinGroupScannerPage> {
   }
 
   Future<void> _toggleTorch() async {
-    await _scannerController.toggleTorch();
+    try {
+      await _scannerController.toggleTorch();
+    } catch (_) {
+      return; // Kamera belum jalan / tidak punya lampu kilat.
+    }
+    if (!mounted) return;
     setState(() {
       _isTorchOn = !_isTorchOn;
     });
+  }
+
+  /// Buka ulang kamera (mis. setelah izin kamera diberikan di Pengaturan).
+  Future<void> _restartCamera() async {
+    try {
+      await _scannerController.stop();
+      await _scannerController.start();
+    } catch (e) {
+      // Galat ditampilkan oleh errorBuilder lewat state controller.
+      debugPrint('[Scanner] gagal membuka kamera: $e');
+    }
   }
 
   @override
@@ -157,18 +168,29 @@ class _JoinGroupScannerPageState extends State<JoinGroupScannerPage> {
           MobileScanner(
             controller: _scannerController,
             onDetect: _onBarcodeDetected,
+            errorBuilder: (context, error) =>
+                _CameraErrorView(error: error, onRetry: _restartCamera),
           ),
 
-          // Bingkai area fokus scan
-          Center(
-            child: Container(
-              width: 250,
-              height: 250,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: theme.colorScheme.primary, width: 3),
-              ),
-            ),
+          // Bingkai area fokus scan (disembunyikan saat kamera gagal dibuka)
+          ValueListenableBuilder<MobileScannerState>(
+            valueListenable: _scannerController,
+            builder: (context, state, _) {
+              if (state.error != null) return const SizedBox.shrink();
+              return Center(
+                child: Container(
+                  width: 250,
+                  height: 250,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: theme.colorScheme.primary,
+                      width: 3,
+                    ),
+                  ),
+                ),
+              );
+            },
           ),
 
           // Petunjuk + opsi tempel kode di bagian bawah layar
@@ -190,16 +212,17 @@ class _JoinGroupScannerPageState extends State<JoinGroupScannerPage> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: const Text(
-                      'Arahkan kamera ke QR Code undangan dari admin grup',
+                      'Arahkan kamera ke QR Code undangan dari admin grup, '
+                      'atau ketik kodenya.',
                       textAlign: TextAlign.center,
                       style: TextStyle(color: Colors.white),
                     ),
                   ),
                   const SizedBox(height: 12),
                   FilledButton.icon(
-                    onPressed: _pasteInvite,
-                    icon: const Icon(Icons.content_paste_rounded),
-                    label: const Text('Tempel Kode Undangan'),
+                    onPressed: _enterCode,
+                    icon: const Icon(Icons.keyboard_rounded),
+                    label: const Text('Masukkan Kode Undangan'),
                     style: FilledButton.styleFrom(
                       minimumSize: const Size.fromHeight(48),
                       shape: RoundedRectangleBorder(
@@ -229,15 +252,14 @@ class _JoinGroupScannerPageState extends State<JoinGroupScannerPage> {
                         const CircularProgressIndicator(),
                         const SizedBox(height: 16),
                         const Text(
-                          'Memproses undangan grup...',
+                          'Bergabung ke grup...',
                           style: TextStyle(fontWeight: FontWeight.w600),
                         ),
                         const SizedBox(height: 6),
                         Text(
                           _fromPaste
-                              ? 'Mengirim permintaan ke pembuat grup'
-                              : 'Menunggu persetujuan pembuat grup '
-                                    '(biarkan QR tetap terbuka di HP-nya)',
+                              ? 'Memeriksa kode undangan'
+                              : 'Menyinkronkan data grup',
                           textAlign: TextAlign.center,
                         ),
                       ],
@@ -249,5 +271,99 @@ class _JoinGroupScannerPageState extends State<JoinGroupScannerPage> {
         ],
       ),
     );
+  }
+}
+
+/// Pengganti tampilan galat bawaan mobile_scanner, yang di build rilis selalu
+/// hanya menampilkan "An unexpected error occurred." tanpa penyebab.
+class _CameraErrorView extends StatelessWidget {
+  const _CameraErrorView({required this.error, required this.onRetry});
+
+  final MobileScannerException error;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final (
+      IconData icon,
+      String title,
+      String body,
+    ) = switch (error.errorCode) {
+      MobileScannerErrorCode.permissionDenied => (
+        Icons.no_photography_outlined,
+        'Izin kamera ditolak',
+        'Izinkan akses kamera untuk MotorQu di Pengaturan HP '
+            '(Aplikasi > MotorQu > Izin > Kamera), lalu ketuk Coba Lagi.\n\n'
+            'Atau masukkan kode undangan secara manual di bawah.',
+      ),
+      MobileScannerErrorCode.unsupported => (
+        Icons.videocam_off_outlined,
+        'Kamera tidak tersedia',
+        'HP ini tidak punya kamera yang bisa dipakai untuk memindai. '
+            'Masukkan kode undangan secara manual di bawah.',
+      ),
+      _ => (
+        Icons.error_outline,
+        'Kamera gagal dibuka',
+        'Tutup aplikasi lain yang sedang memakai kamera, lalu ketuk '
+            'Coba Lagi. Atau masukkan kode undangan secara manual di bawah.'
+            '${_detail()}',
+      ),
+    };
+
+    return ColoredBox(
+      color: Colors.black,
+      child: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(32, 32, 32, 160),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: Colors.white, size: 48),
+              const SizedBox(height: 16),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                body,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white70, height: 1.4),
+              ),
+              const SizedBox(height: 20),
+              OutlinedButton.icon(
+                onPressed: onRetry,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Coba Lagi'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  side: const BorderSide(color: Colors.white54),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Detail teknis singkat agar laporan bug bisa dilacak.
+  String _detail() {
+    final d = error.errorDetails;
+    final parts = [
+      error.errorCode.name,
+      if (d?.code != null) d!.code!,
+      if (d?.message != null) d!.message!,
+    ];
+    // Baris pertama stack trace native (bila ada) untuk melacak sumbernya.
+    final trace = d?.details?.toString().trim().split('\n').take(3).join('\n');
+    return '\n\n(${parts.join(': ')})'
+        '${trace == null || trace.isEmpty ? '' : '\n$trace'}';
   }
 }

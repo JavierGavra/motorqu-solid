@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:motorqu_solid/services/invite_codec.dart';
 import 'package:motorqu_solid/ui/widgets/group/group_common.dart';
 
 Widget _iconTitle(
@@ -11,7 +12,9 @@ Widget _iconTitle(
     children: [
       Icon(icon, color: color),
       const SizedBox(width: 8),
-      Text(text),
+      // Flexible: judul panjang dibungkus ke baris berikutnya, tidak
+      // keluar dari dialog.
+      Flexible(child: Text(text)),
     ],
   );
 }
@@ -77,33 +80,43 @@ Future<String?> showCreateGroupDialog(BuildContext context) {
   );
 }
 
-/// Dialog menempel pesan/kode undangan yang dikirim lewat chat.
-/// Mengembalikan teks mentah (di-decode oleh InviteCodec) atau null.
-Future<String?> showPasteInviteDialog(BuildContext context) {
+/// Dialog mengetik / menempel kode undangan (mis. `ridlofw-K7M2QX`).
+/// Pesan chat utuh juga boleh ditempel; kodenya diambil otomatis.
+/// Mengembalikan teks mentah atau null.
+Future<String?> showEnterInviteCodeDialog(BuildContext context) {
   final ctrl = TextEditingController();
   return showDialog<String>(
     context: context,
     builder: (ctx) => AlertDialog(
       shape: _dialogShape,
-      title: _iconTitle(Icons.login_rounded, 'Tempel Kode Undangan'),
+      title: _iconTitle(Icons.login_rounded, 'Masukkan Kode Undangan'),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const Text(
-            'Tempel pesan undangan MotorQu yang kamu terima lewat chat. '
-            'Pesan utuh boleh, tidak perlu dipotong.',
+            'Ketik kode dari admin grup, atau tempel pesan undangannya.',
             style: TextStyle(fontSize: 13, height: 1.4),
           ),
           const SizedBox(height: 12),
           TextField(
             controller: ctrl,
             autofocus: true,
-            minLines: 3,
-            maxLines: 5,
-            decoration: const InputDecoration(
-              hintText: 'MQ1-...',
-              border: OutlineInputBorder(),
+            autocorrect: false,
+            enableSuggestions: false,
+            textCapitalization: TextCapitalization.none,
+            keyboardType: TextInputType.visiblePassword,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (v) => Navigator.pop(ctx, v),
+            style: const TextStyle(fontSize: 18, letterSpacing: 0.5),
+            decoration: InputDecoration(
+              hintText: 'namaakun-K7M2QX',
+              // Samar agar jelas ini contoh, bukan isian.
+              hintStyle: TextStyle(
+                color: Theme.of(ctx).colorScheme.onSurface
+                    .withValues(alpha: 0.3),
+              ),
+              border: const OutlineInputBorder(),
             ),
           ),
           Align(
@@ -112,10 +125,12 @@ Future<String?> showPasteInviteDialog(BuildContext context) {
               onPressed: () async {
                 final data = await Clipboard.getData(Clipboard.kTextPlain);
                 final text = data?.text;
-                if (text != null) ctrl.text = text;
+                if (text == null) return;
+                // Pesan chat utuh -> ambil kodenya saja.
+                ctrl.text = InviteCode.parse(text)?.text ?? text.trim();
               },
               icon: const Icon(Icons.content_paste_rounded, size: 18),
-              label: const Text('Tempel dari clipboard'),
+              label: const Text('Tempel'),
             ),
           ),
         ],

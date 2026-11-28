@@ -6,22 +6,57 @@ import 'package:flutter/foundation.dart';
 import 'package:motorqu_solid/models/family_group.dart';
 import 'package:motorqu_solid/models/join_request.dart';
 import 'package:motorqu_solid/models/motorcycle.dart';
+import 'package:motorqu_solid/models/turtle_utils.dart';
 import 'package:motorqu_solid/services/access_policy.dart';
 import 'package:motorqu_solid/services/database_service.dart';
+import 'package:motorqu_solid/services/invite_codec.dart';
 import 'package:motorqu_solid/services/pod_atomic.dart';
 import 'package:motorqu_solid/services/pod_utils.dart';
 import 'package:solidpod/solidpod.dart';
 import 'package:uuid/uuid.dart';
 
-/// Hasil memindai QR undangan.
+/// Hasil bergabung lewat kode / QR undangan.
 class JoinOutcome {
-  const JoinOutcome({required this.groupId, required this.pending});
+  const JoinOutcome({
+    required this.groupId,
+    required this.pending,
+    this.groupName = '',
+  });
 
   final String groupId;
+  final String groupName;
 
-  /// `true` bila permintaan sudah terkirim tapi belum disetujui host grup
-  /// (host belum membuka aplikasi). Grup akan muncul otomatis nanti.
+  /// `true` bila kode sudah diterima tapi akses data grup belum dibuka oleh
+  /// aplikasi pembuat grup (yang sedang tidak berjalan). Grup tampil sebagai
+  /// "menyinkronkan" dan aktif otomatis tanpa perlu tindakan siapa pun.
   final bool pending;
+}
+
+/// Grup yang sudah dimasuki dengan kode tapi aksesnya belum dibuka oleh
+/// aplikasi pembuat grup.
+class PendingGroup {
+  const PendingGroup({
+    required this.groupId,
+    required this.name,
+    required this.requestedAt,
+  });
+
+  final String groupId;
+  final String name;
+  final DateTime requestedAt;
+}
+
+/// Kode undangan aktif sebuah grup.
+class InviteInfo {
+  const InviteInfo({
+    required this.code,
+    required this.expiresAt,
+    required this.groupName,
+  });
+
+  final InviteCode code;
+  final DateTime expiresAt;
+  final String groupName;
 }
 
 /// Pointer `joined_groups/<id>.ttl` di Pod user sendiri.
@@ -30,6 +65,7 @@ class _GroupPointer {
     required this.groupId,
     required this.groupUrl,
     required this.ownerId,
+    this.groupName,
     this.requestedAt,
     this.deniedSince,
   });
@@ -37,6 +73,7 @@ class _GroupPointer {
   final String groupId;
   final String groupUrl;
   final String ownerId;
+  final String? groupName;
   final DateTime? requestedAt;
   final DateTime? deniedSince;
 }
@@ -64,6 +101,8 @@ class GroupService {
   static const _groupsRoot = 'groups';
   static const _joinedGroupsRoot = 'joined_groups';
   static const _requestsRoot = 'group_requests';
+  static const _invitesRoot = InviteCode.invitesDir;
+  static const _inviteValidity = Duration(days: 7);
   static const _grpNs = 'https://example.org/motorqu-group#';
 
   // Aksi yang mengubah keanggotaan sudah menulis ACL langsung; sinkronisasi
@@ -268,6 +307,7 @@ class GroupService {
     required String groupId,
     required String groupUrl,
     required String ownerId,
+    String? groupName,
     DateTime? requestedAt,
     DateTime? deniedSince,
   }) async {
@@ -276,6 +316,7 @@ class GroupService {
         '<#ptr-$groupId> a <${_grpNs}GroupPointer> ;\n'
         '    <${_grpNs}groupId> "$groupId" ;\n'
         '    <${_grpNs}groupResourceUrl> "$groupUrl" ;\n'
+        '${groupName == null || groupName.isEmpty ? '' : '    <${_grpNs}groupName> "${turtleEsc(groupName)}" ;\n'}'
         '${requestedAt == null ? '' : '    <${_grpNs}requestedAt> "${requestedAt.toUtc().toIso8601String()}" ;\n'}'
         '${deniedSince == null ? '' : '    <${_grpNs}deniedSince> "${deniedSince.toUtc().toIso8601String()}" ;\n'}'
         '    <${_grpNs}ownerId> "$ownerId" .\n';
@@ -292,16 +333,23 @@ class GroupService {
   Future<_GroupPointer?> _readGroupPointer(String groupId) async {
     try {
       final content = await readPod(_pointerPath(groupId));
-      String? field(String name) => RegExp(
-        '<${RegExp.escape('$_grpNs$name')}>\\s+"([^"]+)"',
-      ).firstMatch(content)?.group(1);
+      String? field(String name) =>
+          RegExp('<${RegExp.escape('$_grpNs$name')}>\\s+"([^"]+)"')
+              .firstMatch(content)
+              ?.group(1);
 
       final url = field('groupResourceUrl');
       if (url == null) return null;
+      final nameMatch = RegExp(
+        '<${RegExp.escape('${_grpNs}groupName')}>\\s+("(?:[^"\\\\]|\\\\.)*")',
+      ).firstMatch(content);
       return _GroupPointer(
         groupId: groupId,
         groupUrl: url,
         ownerId: field('ownerId') ?? '',
+        groupName: nameMatch == null
+            ? null
+            : turtleLiteral(nameMatch.group(1)!),
         requestedAt: DateTime.tryParse(field('requestedAt') ?? ''),
         deniedSince: DateTime.tryParse(field('deniedSince') ?? ''),
       );
@@ -443,9 +491,16 @@ class GroupService {
   /// Pointer hanya dihapus dengan bukti pasti (404 / terbaca tapi bukan
   /// anggota). Grup yang menolak akses (403) disembunyikan sementara.
   /// Tidak lewat antrean tulis karena dipanggil di setiap refresh halaman.
-  Future<List<FamilyGroup>> getUserGroupsList() async {
+  Future<List<FamilyGroup>> getUserGroupsList() async =>
+      (await getGroupListing()).groups;
+
+  /// Seperti [getUserGroupsList], ditambah grup yang sudah dimasuki dengan
+  /// kode tapi aksesnya belum dibuka aplikasi pembuat grup ([PendingGroup]).
+  Future<({List<FamilyGroup> groups, List<PendingGroup> pending})>
+  getGroupListing() async {
     final res = await _listDir(_joinedGroupsRoot);
     final groups = <FamilyGroup>[];
+    final pending = <PendingGroup>[];
 
     for (final fileUrl in res.files) {
       final fileName = _lastSegment(fileUrl);
@@ -481,10 +536,19 @@ class GroupService {
               groupId: groupId,
               groupUrl: ptr.groupUrl,
               ownerId: ptr.ownerId,
+              groupName: ptr.groupName,
               deniedSince: DateTime.now().toUtc(),
             );
           case PointerAction.hide:
-            break;
+            if (ptr.requestedAt != null) {
+              pending.add(
+                PendingGroup(
+                  groupId: groupId,
+                  name: ptr.groupName ?? read.group?.name ?? '',
+                  requestedAt: ptr.requestedAt!,
+                ),
+              );
+            }
           case PointerAction.remove:
             await _deleteGroupPointer(groupId);
         }
@@ -494,7 +558,8 @@ class GroupService {
     }
 
     groups.sort((a, b) => a.createdAt.compareTo(b.createdAt));
-    return groups;
+    pending.sort((a, b) => a.requestedAt.compareTo(b.requestedAt));
+    return (groups: groups, pending: pending);
   }
 
   Future<List<Motorcycle>> getGroupMotorcycles(String groupId) async {
@@ -715,32 +780,34 @@ class GroupService {
 
   /// Untuk anggota yang bergabung dari jauh (kode lewat chat): host tidak
   /// sedang membuka dialog QR, jadi permintaan diproses setiap beranda
-  /// dimuat. Hanya grup yang di-host user ini & undangannya masih aktif
-  /// (setelah dipakai, kode dihapus sehingga tidak ada request tambahan).
+  /// dimuat. Hanya grup yang di-host user ini & kode undangannya masih
+  /// berlaku (kode kedaluwarsa = tidak ada request yang perlu diproses).
   /// Tidak pernah melempar error.
   Future<void> processPendingJoins(List<FamilyGroup> groups) {
     final running = _pendingJoinsInFlight[webId];
     if (running != null) return running;
 
-    final future = () async {
-      final ownPrefix = await _buildOwnResourceUrl('');
-      final now = DateTime.now().toUtc();
-      for (final g in groups) {
-        if (!_stillActive) return;
-        if (g.activeInviteCode == null) continue;
-        if (g.inviteExpiresAt != null && now.isAfter(g.inviteExpiresAt!)) {
-          continue;
-        }
-        if (!g.groupResourceUrl.startsWith(ownPrefix)) continue;
-        try {
-          await processJoinRequests(g.id);
-        } catch (e) {
-          debugPrint('[Join] gagal memproses permintaan ${g.id}: $e');
-        }
-      }
-    }().catchError((Object e) => debugPrint('[Join] $e')).whenComplete(
-      () => _pendingJoinsInFlight.remove(webId),
-    );
+    final future =
+        () async {
+              final ownPrefix = await _buildOwnResourceUrl('');
+              final now = DateTime.now().toUtc();
+              for (final g in groups) {
+                if (!_stillActive) return;
+                if (g.activeInviteCode == null) continue;
+                if (g.inviteExpiresAt != null &&
+                    now.isAfter(g.inviteExpiresAt!)) {
+                  continue;
+                }
+                if (!g.groupResourceUrl.startsWith(ownPrefix)) continue;
+                try {
+                  await processJoinRequests(g.id);
+                } catch (e) {
+                  debugPrint('[Join] gagal memproses permintaan ${g.id}: $e');
+                }
+              }
+            }()
+            .catchError((Object e) => debugPrint('[Join] $e'))
+            .whenComplete(() => _pendingJoinsInFlight.remove(webId));
     _pendingJoinsInFlight[webId] = future;
     return future;
   }
@@ -773,16 +840,15 @@ class GroupService {
         if (req != null) {
           var added = false;
           // Urutan: tambah anggota (atomik) -> ACL -> hapus permintaan.
-          final updated = await _updateGroup(group.groupResourceUrl, (
-            current,
-          ) {
+          final updated = await _updateGroup(group.groupResourceUrl, (current) {
             if (AccessPolicy.decideJoin(current, req) != JoinDecision.accept) {
               return null;
             }
             added = true;
+            // Kode TIDAK dihapus: satu kode bisa dipakai banyak anggota
+            // sampai kedaluwarsa atau diganti admin.
             return current.copyWith(
               memberUids: [...current.memberUids, req.memberWebId],
-              clearInvite: true,
             );
           });
           if (added) {
@@ -938,8 +1004,7 @@ class GroupService {
         await _updateGroup(groupUrl, (current) {
           final updatedUrls = current.sharedMotorUrls
               .where(
-                (u) =>
-                    u != motorUrl && !u.endsWith('/$motoId/motorcycle.ttl'),
+                (u) => u != motorUrl && !u.endsWith('/$motoId/motorcycle.ttl'),
               )
               .toList();
           if (updatedUrls.length == current.sharedMotorUrls.length) {
@@ -984,70 +1049,193 @@ class GroupService {
     return groupId;
   });
 
-  /// Membuat payload JSON untuk di-render sebagai QR Code undangan
-  /// (berlaku 7 hari, sekali pakai).
+  /// Kode undangan aktif grup (dipakai untuk QR & diketik manual).
   ///
-  /// Tidak lagi membuka akses `authUser` ke group.ttl: calon anggota hanya
-  /// mengirim permintaan ke container khusus (Append saja), lalu host
-  /// memvalidasi kode & menambahkannya.
-  Future<String> createInviteQrPayload(String groupId) => _sync(() async {
-    final groupUrl = await _requireGroupUrl(groupId);
+  /// Satu kode berlaku untuk banyak anggota selama [_inviteValidity]; kode
+  /// yang masih berlaku dipakai ulang supaya kode yang sudah dibagikan tidak
+  /// hangus hanya karena dialog undangan dibuka lagi. [regenerate] = buat
+  /// kode baru (kode lama langsung tidak berlaku).
+  ///
+  /// Selain menyimpan kode di group.ttl, file penunjuk `invites/<KODE>.ttl`
+  /// ditulis di Pod user ini (bisa dibaca user Solid yang login) agar calon
+  /// anggota bisa menemukan grup hanya dari kode pendek.
+  Future<InviteInfo> getInvite(String groupId, {bool regenerate = false}) =>
+      _sync(() async {
+        final groupUrl = await _requireGroupUrl(groupId);
 
-    // Kode dibuat SEKALI di luar transformasi, supaya kode di QR selalu sama
-    // dengan kode yang benar-benar tersimpan walaupun terjadi retry.
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    final random = Random.secure();
-    final code = List.generate(
-      6,
-      (_) => chars[random.nextInt(chars.length)],
-    ).join();
-    final expiresAt = DateTime.now().toUtc().add(const Duration(days: 7));
+        // Kode dibuat SEKALI di luar transformasi, supaya kode yang tampil
+        // selalu sama dengan yang tersimpan walaupun terjadi retry.
+        final random = Random.secure();
+        final fresh = List.generate(
+          InviteCode.codeLength,
+          (_) =>
+              InviteCode.alphabet[random.nextInt(InviteCode.alphabet.length)],
+        ).join();
+        final now = DateTime.now().toUtc();
+        String? previousCode;
 
-    final group = await _updateGroup(groupUrl, (current) {
-      if (!current.isOwner(webId)) {
-        throw Exception(
-          'Hanya owner/admin grup yang dapat membuat QR undangan',
+        final group = await _updateGroup(groupUrl, (current) {
+          if (!current.isOwner(webId)) {
+            throw Exception(
+              'Hanya owner/admin grup yang dapat membuat kode undangan',
+            );
+          }
+          previousCode = current.activeInviteCode;
+          final exp = current.inviteExpiresAt;
+          final stillValid =
+              current.activeInviteCode?.length == InviteCode.codeLength &&
+              exp != null &&
+              now.isBefore(exp.subtract(const Duration(hours: 1)));
+          if (!regenerate && stillValid) return null;
+          return current.copyWith(
+            activeInviteCode: fresh,
+            inviteExpiresAt: now.add(_inviteValidity),
+          );
+        });
+
+        final code = group.activeInviteCode!;
+        final expiresAt = group.inviteExpiresAt!;
+
+        if (await _isOwnUrl(groupUrl)) {
+          // Tutup akses authUser lama (grup dari versi sebelumnya) dulu.
+          await _reconcileGroupAcl(group);
+          await _ensureRequestsContainer(groupId);
+        }
+
+        await _writeInviteIndex(
+          GroupInvite(
+            groupId: groupId,
+            groupName: group.name,
+            groupUrl: groupUrl,
+            requestsUrl: AccessPolicy.requestsUrlFor(groupUrl, groupId),
+            code: code,
+            expiresAt: expiresAt,
+          ),
         );
+        final old = previousCode;
+        if (old != null && old != code) await _deleteInviteIndex(old);
+
+        return InviteInfo(
+          code: InviteCode(
+            podRoot: InviteCode.podRootFromDataUrl(
+              await _buildOwnResourceUrl(''),
+            ),
+            code: code,
+          ),
+          expiresAt: expiresAt,
+          groupName: group.name,
+        );
+      });
+
+  String _invitePath(String code) => '$_invitesRoot/$code.ttl';
+
+  /// File penunjuk kode -> grup. Hanya bisa DIBACA user lain yang login
+  /// (tanpa izin melihat isi folder), jadi harus tahu kodenya.
+  Future<void> _writeInviteIndex(GroupInvite invite) async {
+    await writePod(
+      _invitePath(invite.code),
+      invite.toTurtle(),
+      encrypted: false,
+      overwrite: true,
+      createAcl: false,
+    );
+    await _applyAcl(
+      await _buildOwnResourceUrl(_invitePath(invite.code)),
+      isFile: true,
+      agents: const {},
+      authUser: const {AccessMode.read},
+      createIfMissing: true,
+    );
+  }
+
+  Future<void> _deleteInviteIndex(String code) async {
+    for (final path in [_invitePath(code), '${_invitePath(code)}.acl']) {
+      try {
+        await deleteFile(fileUrl: await _buildOwnResourceUrl(path));
+      } catch (e) {
+        if (!_isNotFound(e)) debugPrint('Gagal hapus undangan $path: $e');
       }
-      return current.copyWith(
-        activeInviteCode: code,
-        inviteExpiresAt: expiresAt,
-      );
-    });
-
-    if (await _isOwnUrl(groupUrl)) {
-      // Tutup akses authUser lama (grup dari versi sebelumnya) dulu.
-      await _reconcileGroupAcl(group);
-      await _ensureRequestsContainer(groupId);
     }
+  }
 
-    return jsonEncode({
-      'v': 2,
-      'groupId': groupId,
-      'groupUrl': groupUrl,
-      'requestsUrl': AccessPolicy.requestsUrlFor(groupUrl, groupId),
-      'code': code,
-    });
-  });
+  /// Baca file penunjuk undangan di Pod pembuat kode.
+  Future<GroupInvite> _readInvite(InviteCode invite) async {
+    // Huruf besar di nama akun biasanya karena keyboard HP otomatis
+    // mengkapitalkan; coba juga versi huruf kecil.
+    final roots = {invite.podRoot, invite.podRoot.toLowerCase()};
+    Object? lastError;
+    for (final root in roots) {
+      final url = InviteCode(podRoot: root, code: invite.code).indexUrl;
+      try {
+        final content = await _isOwnUrl(url)
+            ? await readPod(
+                url.substring((await _buildOwnResourceUrl('')).length),
+              )
+            : await readExternalPod(url);
+        final parsed = GroupInvite.tryParse(content);
+        if (parsed != null && parsed.code == invite.code) return parsed;
+        lastError = const FormatException('isi undangan rusak');
+      } catch (e) {
+        lastError = e;
+        if (!_isNotFound(e) && e is! AccessForbiddenException) break;
+      }
+    }
+    final err = lastError;
+    if (err != null &&
+        !_isNotFound(err) &&
+        err is! AccessForbiddenException &&
+        err is! FormatException) {
+      debugPrint('[Join] gagal membaca undangan: $err');
+      throw Exception(
+        'Gagal memeriksa kode undangan. Periksa koneksi internet lalu coba '
+        'lagi.',
+      );
+    }
+    throw Exception(
+      'Kode undangan tidak ditemukan. Periksa lagi penulisannya, atau minta '
+      'kode baru ke admin grup.',
+    );
+  }
 
-  /// Bergabung ke grup dengan memindai QR Code undangan.
+  /// Bergabung ke grup dengan kode undangan (diketik / ditempel) atau isi
+  /// QR. Tidak ada persetujuan manual: kode yang benar langsung diterima.
   ///
-  /// Mengirim permintaan ke host lalu menunggu sebentar ([approvalWait])
-  /// sampai host menyetujui. Bila host belum membuka aplikasi, hasilnya
-  /// `pending` dan grup akan muncul otomatis setelah disetujui.
-  ///
-  /// Scan QR: host biasanya sedang membuka dialog QR (memproses tiap 3 dtk),
-  /// jadi tunggu ±20 dtk. Kode lewat chat: host jarang sedang membuka
-  /// aplikasi, jadi cukup cek singkat.
-  Future<JoinOutcome> joinGroupWithQr(
-    String qrRawData, {
-    Duration approvalWait = const Duration(seconds: 20),
+  /// Karena di Solid hanya pemilik Pod yang bisa membuka akses data grup,
+  /// anggota langsung aktif bila aplikasi pembuat grup sedang berjalan
+  /// (mis. dialog QR terbuka). Bila tidak, grup tampil "menyinkronkan"
+  /// ([JoinOutcome.pending]) dan aktif otomatis begitu aplikasi pembuat grup
+  /// dibuka. [wait] = lama menunggu akses dibuka sebelum mengembalikan hasil.
+  Future<JoinOutcome> joinGroup(
+    String input, {
+    Duration wait = const Duration(seconds: 10),
   }) async {
     final Map<String, dynamic> payload;
-    try {
-      payload = jsonDecode(qrRawData.trim()) as Map<String, dynamic>;
-    } catch (_) {
-      throw Exception('Format QR Code undangan tidak valid');
+    var groupName = '';
+
+    final legacy = InviteCodec.decode(input);
+    if (legacy != null) {
+      payload = jsonDecode(legacy) as Map<String, dynamic>;
+    } else {
+      final invite = InviteCode.parse(input);
+      if (invite == null) {
+        if (InviteCode.looksLikeBareCode(input)) {
+          throw Exception(
+            'Kode belum lengkap. Ketik juga nama akun di depannya, '
+            'contoh: namaakun-${input.trim().toUpperCase()}',
+          );
+        }
+        throw Exception(
+          'Kode undangan tidak dikenali. Contoh format: namaakun-K7M2QX',
+        );
+      }
+      final info = await _readInvite(invite);
+      if (info.isExpired()) {
+        throw Exception(
+          'Kode undangan sudah kedaluwarsa. Minta kode baru ke admin grup.',
+        );
+      }
+      payload = info.toJoinPayload();
+      groupName = info.groupName;
     }
 
     final groupId = payload['groupId'] as String? ?? '';
@@ -1056,12 +1244,12 @@ class GroupService {
     final code = (payload['code'] as String? ?? '').trim().toUpperCase();
 
     if (groupId.isEmpty || groupUrl.isEmpty || code.length != 6) {
-      throw Exception('Data QR Code undangan tidak lengkap');
+      throw Exception('Data undangan tidak lengkap');
     }
     if (requestsUrl.isEmpty) {
       throw Exception(
-        'QR dibuat oleh versi aplikasi lama. Minta pembuat grup memperbarui '
-        'aplikasi lalu membuat QR baru.',
+        'Undangan dibuat oleh versi aplikasi lama. Minta admin grup '
+        'memperbarui aplikasi lalu membuat kode baru.',
       );
     }
 
@@ -1075,7 +1263,11 @@ class GroupService {
           ownerId: existing.group!.ownerId,
         ),
       );
-      return JoinOutcome(groupId: groupId, pending: false);
+      return JoinOutcome(
+        groupId: groupId,
+        pending: false,
+        groupName: existing.group!.name,
+      );
     }
 
     await _sync(() async {
@@ -1102,12 +1294,14 @@ class GroupService {
         groupId: groupId,
         groupUrl: groupUrl,
         ownerId: '',
+        groupName: groupName,
         requestedAt: DateTime.now().toUtc(),
       );
     });
 
-    // Tunggu persetujuan host (dialog QR host memproses tiap beberapa detik).
-    for (var i = 0; i < approvalWait.inSeconds ~/ 2; i++) {
+    // Bila aplikasi pembuat grup sedang berjalan (dialog QR memproses tiap
+    // 3 dtk), akses biasanya terbuka dalam beberapa detik.
+    for (var i = 0; i < wait.inSeconds ~/ 2; i++) {
       await Future<void>.delayed(const Duration(seconds: 2));
       final read = await _readGroup(groupUrl);
       if (read.group?.memberUids.contains(webId) ?? false) {
@@ -1118,10 +1312,14 @@ class GroupService {
             ownerId: read.group!.ownerId,
           ),
         );
-        return JoinOutcome(groupId: groupId, pending: false);
+        return JoinOutcome(
+          groupId: groupId,
+          pending: false,
+          groupName: read.group!.name,
+        );
       }
     }
-    return JoinOutcome(groupId: groupId, pending: true);
+    return JoinOutcome(groupId: groupId, pending: true, groupName: groupName);
   }
 
   /// Mengambil nama profil langsung dari WebID card#me masing-masing anggota
@@ -1171,6 +1369,7 @@ class GroupService {
     final isHost = await _isOwnUrl(groupUrl);
     final ownMotorPrefix = await _buildOwnResourceUrl(_motorsRoot);
     var deleteGroupFile = false;
+    String? inviteCode;
 
     try {
       await _updateGroup(groupUrl, (current) {
@@ -1188,13 +1387,12 @@ class GroupService {
             );
           }
           deleteGroupFile = true;
+          inviteCode = current.activeInviteCode;
           return null;
         }
 
         var nextOwnerId = current.ownerId;
-        var nextOwnerIds = current.ownerIds
-            .where((o) => o != webId)
-            .toList();
+        var nextOwnerIds = current.ownerIds.where((o) => o != webId).toList();
 
         if (current.ownerId == webId && remainingMembers.isNotEmpty) {
           nextOwnerId = nextOwnerIds.isNotEmpty
@@ -1220,6 +1418,8 @@ class GroupService {
     }
 
     if (deleteGroupFile) {
+      final code = inviteCode;
+      if (code != null) await _deleteInviteIndex(code);
       for (final url in [
         await _buildOwnResourceUrl(_ownGroupPath(groupId)),
         await _buildOwnResourceUrl('$_requestsRoot/$groupId/'),

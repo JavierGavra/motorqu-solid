@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:motorqu_solid/models/family_group.dart';
 import 'package:motorqu_solid/services/app_refresh.dart';
 import 'package:motorqu_solid/services/database_service.dart';
+import 'package:motorqu_solid/services/group_service.dart';
 import 'package:motorqu_solid/ui/pages/join_group_scanner_page.dart';
 import 'package:motorqu_solid/ui/widgets/group/group_actions_menu.dart';
 import 'package:motorqu_solid/ui/widgets/group/group_common.dart';
@@ -12,6 +13,7 @@ import 'package:motorqu_solid/ui/widgets/group/group_motor_section.dart';
 import 'package:motorqu_solid/ui/widgets/group/group_switcher.dart';
 import 'package:motorqu_solid/ui/widgets/group/leave_group_button.dart';
 import 'package:motorqu_solid/ui/widgets/group/no_group_view.dart';
+import 'package:motorqu_solid/ui/widgets/group/pending_group_card.dart';
 import 'package:motorqu_solid/ui/widgets/group/pick_motor_sheet.dart';
 import 'package:motorqu_solid/models/motorcycle.dart';
 import 'package:motorqu_solid/ui/widgets/invite_qr_dialog.dart';
@@ -32,14 +34,15 @@ class _GroupPageState extends State<GroupPage>
   final DatabaseService _db = DatabaseService();
   String get _myUid => _db.webId;
 
-  late Future<List<FamilyGroup>> _groupsFuture;
+  late Future<({List<FamilyGroup> groups, List<PendingGroup> pending})>
+  _groupsFuture;
   String? _selectedGroupId;
   bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
-    _groupsFuture = _db.group.getUserGroupsList();
+    _groupsFuture = _db.group.getGroupListing();
     _groupsFuture.then((_) => markLoaded(), onError: (_) {});
   }
 
@@ -55,7 +58,7 @@ class _GroupPageState extends State<GroupPage>
   Future<void> autoRefresh() => _refreshGroups();
 
   Future<void> _refreshGroups() async {
-    final future = _db.group.getUserGroupsList();
+    final future = _db.group.getGroupListing();
     if (mounted) {
       setState(() {
         _groupsFuture = future;
@@ -119,10 +122,16 @@ class _GroupPageState extends State<GroupPage>
     );
 
     if (joinedGroupId != null && mounted) {
-      // Muat ulang daftar grup atau pilih grup yang baru dimasuki
+      // Pilih grup yang baru dimasuki (bila sudah aktif) lalu muat ulang.
+      setState(() => _selectedGroupId = joinedGroupId);
       await _refreshGroups();
     }
   }
+
+  List<Widget> _pendingCards(List<PendingGroup> pending) => [
+    for (final g in pending)
+      PendingGroupCard(key: ValueKey('pending-${g.groupId}'), group: g),
+  ];
 
   Future<void> _editGroupName(FamilyGroup group) async {
     final newName = await showEditGroupNameDialog(context, group.name);
@@ -378,36 +387,48 @@ class _GroupPageState extends State<GroupPage>
         children: [
           RefreshIndicator(
             onRefresh: _refreshGroups,
-            child: FutureBuilder<List<FamilyGroup>>(
-              future: _groupsFuture,
-              builder: (context, snapshot) {
-                // Spinner hanya saat belum ada data: auto-refresh tidak berkedip.
-                if (snapshot.connectionState == ConnectionState.waiting &&
-                    !snapshot.hasData) {
-                  return const _RefreshableLoading();
-                }
-                final groups = snapshot.data ?? [];
+            child:
+                FutureBuilder<
+                  ({List<FamilyGroup> groups, List<PendingGroup> pending})
+                >(
+                  future: _groupsFuture,
+                  builder: (context, snapshot) {
+                    // Spinner hanya saat belum ada data: auto-refresh tidak berkedip.
+                    if (snapshot.connectionState == ConnectionState.waiting &&
+                        !snapshot.hasData) {
+                      return const _RefreshableLoading();
+                    }
+                    final groups = snapshot.data?.groups ?? const [];
+                    final pending = snapshot.data?.pending ?? const [];
 
-                if (groups.isEmpty) {
-                  return NoGroupView(
-                    onCreate: _createGroup,
-                    onJoin: _joinGroup,
-                  );
-                }
+                    if (groups.isEmpty && pending.isEmpty) {
+                      return NoGroupView(
+                        onCreate: _createGroup,
+                        onJoin: _joinGroup,
+                      );
+                    }
 
-                if (_selectedGroupId == null ||
-                    !groups.any((g) => g.id == _selectedGroupId)) {
-                  _selectedGroupId = groups.first.id;
-                }
+                    if (groups.isEmpty) {
+                      return ListView(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        children: _pendingCards(pending),
+                      );
+                    }
 
-                final activeGroup = groups.firstWhere(
-                  (g) => g.id == _selectedGroupId,
-                  orElse: () => groups.first,
-                );
+                    if (_selectedGroupId == null ||
+                        !groups.any((g) => g.id == _selectedGroupId)) {
+                      _selectedGroupId = groups.first.id;
+                    }
 
-                return _buildGroupDetail(groups, activeGroup);
-              },
-            ),
+                    final activeGroup = groups.firstWhere(
+                      (g) => g.id == _selectedGroupId,
+                      orElse: () => groups.first,
+                    );
+
+                    return _buildGroupDetail(groups, activeGroup, pending);
+                  },
+                ),
           ),
           if (_isLoading)
             Positioned.fill(
@@ -432,13 +453,18 @@ class _GroupPageState extends State<GroupPage>
     );
   }
 
-  Widget _buildGroupDetail(List<FamilyGroup> allGroups, FamilyGroup active) {
+  Widget _buildGroupDetail(
+    List<FamilyGroup> allGroups,
+    FamilyGroup active,
+    List<PendingGroup> pending,
+  ) {
     final isOwner = active.isOwner(_myUid);
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
       physics: const AlwaysScrollableScrollPhysics(),
       children: [
+        ..._pendingCards(pending),
         if (allGroups.length > 1) ...[
           GroupSwitcher(
             groups: allGroups,
