@@ -1,0 +1,527 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ site.title }} · Catat ganti oli motor keluarga</title>
+  <meta name="description" content="{{ site.description | strip }}">
+  <meta name="theme-color" content="#1976D2">
+  <meta property="og:title" content="{{ site.title }}">
+  <meta property="og:description" content="{{ site.description | strip }}">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="https://javiergavra.github.io/motorqu-solid/assets/web/logo-192.png">
+  <link rel="icon" type="image/png" href="assets/web/logo-64.png">
+  <link rel="apple-touch-icon" href="assets/web/logo-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --blue: #1976D2;
+      --blue-deep: #0147C1;
+      --cyan: #22C3F0;
+      --bg: #F6F8FC;
+      --surface: #FFFFFF;
+      --surface-2: #EEF3FB;
+      --text: #0F1B2D;
+      --muted: #55657C;
+      --line: #DCE4F0;
+      --code-bg: #0F1B2D;
+      --code-text: #E6EEF9;
+      --shadow: 0 18px 40px -18px rgba(1, 71, 193, .35);
+      --radius: 18px;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --bg: #0A111D;
+        --surface: #111B2B;
+        --surface-2: #16233A;
+        --text: #E8EEF8;
+        --muted: #9AA9C0;
+        --line: #22314A;
+        --code-bg: #060B14;
+        --shadow: 0 18px 40px -18px rgba(0, 0, 0, .7);
+      }
+    }
+    :root[data-theme="dark"] {
+      --bg: #0A111D;
+      --surface: #111B2B;
+      --surface-2: #16233A;
+      --text: #E8EEF8;
+      --muted: #9AA9C0;
+      --line: #22314A;
+      --code-bg: #060B14;
+      --shadow: 0 18px 40px -18px rgba(0, 0, 0, .7);
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; scroll-padding-top: 76px; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Poppins", system-ui, -apple-system, "Segoe UI", sans-serif;
+      line-height: 1.65;
+      -webkit-font-smoothing: antialiased;
+    }
+    img { max-width: 100%; }
+    a { color: var(--blue); }
+    .wrap { max-width: 1120px; margin: 0 auto; padding: 0 20px; }
+
+    /* ---------- Navigasi ---------- */
+    .nav {
+      position: sticky; top: 0; z-index: 20;
+      background: color-mix(in srgb, var(--bg) 82%, transparent);
+      backdrop-filter: saturate(180%) blur(14px);
+      -webkit-backdrop-filter: saturate(180%) blur(14px);
+      border-bottom: 1px solid var(--line);
+    }
+    .nav .wrap { display: flex; align-items: center; gap: 24px; height: 64px; }
+    .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--text); font-weight: 700; }
+    .brand img { width: 34px; height: 34px; }
+    .nav-links { display: flex; gap: 22px; margin-left: auto; align-items: center; }
+    .nav-links a { color: var(--muted); text-decoration: none; font-size: 14px; font-weight: 500; }
+    .nav-links a:hover { color: var(--blue); }
+    .nav-cta {
+      background: var(--blue); color: #fff !important; padding: 8px 16px; border-radius: 999px;
+    }
+    .nav-cta:hover { background: var(--blue-deep); }
+
+    /* ---------- Hero ---------- */
+    .hero {
+      position: relative; overflow: hidden; color: #fff;
+      background:
+        radial-gradient(900px 420px at 85% 10%, rgba(34, 195, 240, .35), transparent 60%),
+        radial-gradient(700px 500px at 0% 100%, rgba(255, 255, 255, .10), transparent 60%),
+        linear-gradient(135deg, var(--blue) 0%, var(--blue-deep) 70%, #01318A 100%);
+    }
+    .hero::before {
+      content: ""; position: absolute; inset: 0; opacity: .12; pointer-events: none;
+      background-image:
+        linear-gradient(rgba(255,255,255,.5) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,.5) 1px, transparent 1px);
+      background-size: 44px 44px;
+      mask-image: linear-gradient(180deg, #000 0%, transparent 85%);
+      -webkit-mask-image: linear-gradient(180deg, #000 0%, transparent 85%);
+    }
+    .hero .wrap {
+      position: relative; display: grid; grid-template-columns: 1.1fr .9fr;
+      gap: 48px; align-items: center; padding-top: 72px; padding-bottom: 80px;
+    }
+    .pill {
+      display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500;
+      background: rgba(255, 255, 255, .14); border: 1px solid rgba(255, 255, 255, .25);
+      padding: 6px 14px; border-radius: 999px;
+    }
+    .pill .dot { width: 8px; height: 8px; border-radius: 50%; background: #5CF2A6; box-shadow: 0 0 0 4px rgba(92, 242, 166, .25); }
+    .hero h1 {
+      font-size: clamp(34px, 5vw, 54px); line-height: 1.12; margin: 20px 0 16px;
+      font-weight: 800; letter-spacing: -.02em;
+    }
+    .hero h1 em { font-style: normal; color: #9FE6FF; }
+    .hero p.lead { font-size: 17px; color: rgba(255, 255, 255, .86); max-width: 540px; margin: 0 0 28px; }
+    .actions { display: flex; flex-wrap: wrap; gap: 12px; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 10px; text-decoration: none;
+      font-weight: 600; font-size: 15px; padding: 14px 22px; border-radius: 14px;
+      transition: transform .15s ease, box-shadow .15s ease, background .15s ease;
+    }
+    .btn svg { width: 20px; height: 20px; flex: none; }
+    .btn-primary { background: #fff; color: var(--blue-deep); box-shadow: 0 10px 24px -10px rgba(0, 0, 0, .45); }
+    .btn-primary:hover { transform: translateY(-2px); }
+    .btn-ghost { color: #fff; border: 1.5px solid rgba(255, 255, 255, .45); }
+    .btn-ghost:hover { background: rgba(255, 255, 255, .1); }
+    .meta { margin-top: 18px; font-size: 13px; color: rgba(255, 255, 255, .75); display: flex; flex-wrap: wrap; gap: 6px 16px; }
+    .meta span { display: inline-flex; align-items: center; gap: 6px; }
+    .qr {
+      margin-top: 28px; display: inline-flex; align-items: center; gap: 14px;
+      background: rgba(255, 255, 255, .1); border: 1px solid rgba(255, 255, 255, .2);
+      padding: 10px 16px 10px 10px; border-radius: 16px; font-size: 13px; color: rgba(255, 255, 255, .85);
+    }
+    .qr-box { background: #fff; padding: 6px; border-radius: 10px; width: 92px; height: 92px; }
+    .qr-box img, .qr-box canvas { width: 80px !important; height: 80px !important; display: block; }
+    .qr strong { display: block; color: #fff; font-size: 14px; }
+
+    .phones { position: relative; height: 540px; width: 100%; max-width: 440px; margin-left: auto; }
+    .phone {
+      position: absolute; width: 56%; max-width: 248px; border-radius: 34px; padding: 8px;
+      background: #0B1220; box-shadow: 0 30px 60px -20px rgba(0, 0, 0, .55), inset 0 0 0 1.5px rgba(255,255,255,.08);
+    }
+    .phone img { display: block; width: 100%; border-radius: 27px; aspect-ratio: 9 / 20; object-fit: cover; }
+    .phone.front { right: 0; top: 0; z-index: 2; }
+    .phone.back { left: 0; top: 56px; transform: rotate(-7deg); opacity: .92; }
+
+    /* ---------- Section umum ---------- */
+    section { padding: 88px 0; }
+    .eyebrow { color: var(--blue); font-weight: 600; font-size: 13px; letter-spacing: .12em; text-transform: uppercase; }
+    .section-title { font-size: clamp(26px, 3.4vw, 36px); line-height: 1.2; margin: 8px 0 12px; font-weight: 700; letter-spacing: -.01em; }
+    .section-sub { color: var(--muted); max-width: 620px; margin: 0 0 40px; }
+
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+    .card {
+      background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+      padding: 26px; transition: transform .2s ease, box-shadow .2s ease;
+    }
+    .card:hover { transform: translateY(-4px); box-shadow: var(--shadow); }
+    .icon {
+      width: 46px; height: 46px; border-radius: 13px; display: grid; place-items: center;
+      background: linear-gradient(135deg, var(--blue), var(--blue-deep)); color: #fff; margin-bottom: 16px;
+    }
+    .icon svg { width: 24px; height: 24px; }
+    .card h3 { margin: 0 0 6px; font-size: 18px; }
+    .card p { margin: 0; color: var(--muted); font-size: 14.5px; }
+
+    /* ---------- Cara kerja ---------- */
+    .how { background: var(--surface-2); }
+    .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; counter-reset: step; }
+    .step { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 28px 24px 24px; }
+    .step::before {
+      counter-increment: step; content: counter(step);
+      position: absolute; top: -16px; left: 24px; width: 34px; height: 34px; border-radius: 50%;
+      display: grid; place-items: center; font-weight: 700; color: #fff;
+      background: linear-gradient(135deg, var(--blue), var(--blue-deep)); box-shadow: 0 6px 14px -4px rgba(1,71,193,.5);
+    }
+    .step h3 { margin: 8px 0 6px; font-size: 17px; }
+    .step p { margin: 0; color: var(--muted); font-size: 14.5px; }
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+    .chip { font-size: 12px; font-weight: 500; padding: 4px 10px; border-radius: 999px; background: var(--surface-2); color: var(--muted); border: 1px solid var(--line); }
+    .pod-tree {
+      margin-top: 28px; background: var(--code-bg); color: var(--code-text); border-radius: var(--radius);
+      padding: 22px 24px; font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; font-size: 13.5px;
+      overflow-x: auto; line-height: 1.8;
+    }
+    .pod-tree .c { color: #7F93B2; }
+    .pod-tree .f { color: #9FE6FF; }
+
+    /* ---------- Galeri ---------- */
+    .gallery {
+      display: grid; grid-auto-flow: column; grid-auto-columns: 220px; gap: 22px;
+      overflow-x: auto; padding: 8px 4px 24px; scroll-snap-type: x mandatory;
+      scrollbar-width: thin;
+    }
+    .shot { scroll-snap-align: start; margin: 0; }
+    .shot .frame {
+      border-radius: 28px; padding: 7px; background: #0B1220;
+      box-shadow: 0 20px 40px -22px rgba(1, 30, 80, .6);
+    }
+    .shot img { display: block; width: 100%; border-radius: 22px; aspect-ratio: 9 / 20; object-fit: cover; }
+    .shot figcaption { text-align: center; font-size: 13.5px; color: var(--muted); margin-top: 12px; font-weight: 500; }
+    .hint { font-size: 13px; color: var(--muted); margin-top: -8px; }
+
+    /* ---------- Dokumentasi (isi README) ---------- */
+    .docs { background: var(--surface-2); }
+    .doc {
+      max-width: 860px; margin: 0 auto; background: var(--surface); border: 1px solid var(--line);
+      border-radius: 24px; padding: 44px clamp(20px, 5vw, 56px);
+    }
+    .doc h2 { font-size: 26px; margin: 48px 0 14px; padding-top: 8px; letter-spacing: -.01em; }
+    .doc h2:first-child { margin-top: 0; }
+    .doc h3 { font-size: 19px; margin: 32px 0 10px; }
+    .doc h4 { font-size: 16px; margin: 24px 0 8px; }
+    .doc p, .doc li { font-size: 15px; }
+    .doc ul, .doc ol { padding-left: 22px; }
+    .doc li { margin: 4px 0; }
+    .doc code {
+      font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; font-size: .88em;
+      background: var(--surface-2); border: 1px solid var(--line); padding: 1px 6px; border-radius: 6px;
+    }
+    .doc pre {
+      background: var(--code-bg); color: var(--code-text); padding: 18px 20px; border-radius: 14px;
+      overflow-x: auto; font-size: 13.5px; line-height: 1.6;
+    }
+    .doc pre code { background: none; border: 0; padding: 0; color: inherit; font-size: inherit; }
+    .doc table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 14.5px; }
+    .doc th, .doc td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+    .doc th { background: var(--surface-2); font-weight: 600; }
+    .doc ol > li::marker { color: var(--blue); font-weight: 700; }
+    .doc a { word-break: break-word; }
+    details.maint {
+      margin-top: 48px; border: 1px solid var(--line); border-radius: 16px; padding: 0 22px;
+      background: var(--bg);
+    }
+    details.maint summary {
+      cursor: pointer; padding: 18px 0; font-weight: 600; font-size: 17px; list-style: none;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    details.maint summary::-webkit-details-marker { display: none; }
+    details.maint summary::after { content: "+"; font-size: 24px; color: var(--blue); font-weight: 400; }
+    details.maint[open] summary::after { content: "−"; }
+    details.maint[open] { padding-bottom: 12px; }
+    details.maint h3:first-of-type { margin-top: 4px; }
+
+    /* ---------- Penutup ---------- */
+    .cta {
+      text-align: center; color: #fff; border-radius: 28px; padding: 56px 24px;
+      background:
+        radial-gradient(600px 300px at 80% 0%, rgba(34, 195, 240, .35), transparent 60%),
+        linear-gradient(135deg, var(--blue), var(--blue-deep));
+    }
+    .cta h2 { font-size: clamp(24px, 3.2vw, 34px); margin: 0 0 10px; }
+    .cta p { margin: 0 auto 26px; color: rgba(255, 255, 255, .85); max-width: 520px; }
+    .cta .actions { justify-content: center; }
+    footer { padding: 36px 0 48px; color: var(--muted); font-size: 13.5px; }
+    footer .wrap { display: flex; flex-wrap: wrap; gap: 12px 28px; align-items: center; justify-content: space-between; }
+    footer a { color: var(--muted); text-decoration: none; }
+    footer a:hover { color: var(--blue); }
+    footer .links { display: flex; gap: 20px; flex-wrap: wrap; }
+
+    /* ---------- Responsif ---------- */
+    @media (max-width: 960px) {
+      .hero .wrap { grid-template-columns: 1fr; padding-top: 48px; padding-bottom: 56px; }
+      .phones { height: 470px; max-width: 440px; margin: 0 auto; }
+      .phone { width: 210px; }
+      .phone.back { top: 46px; }
+      .grid, .steps { grid-template-columns: 1fr 1fr; }
+      .steps { row-gap: 36px; }
+    }
+    @media (max-width: 640px) {
+      .nav-links a:not(.nav-cta) { display: none; }
+      .grid, .steps { grid-template-columns: 1fr; }
+      .qr { display: none; }
+      section { padding: 64px 0; }
+      .phones { height: 400px; }
+      .phone { width: 52%; border-radius: 28px; padding: 6px; }
+      .phone img { border-radius: 23px; }
+      .gallery { grid-auto-columns: 180px; }
+      .btn { flex: 1 1 auto; justify-content: center; }
+      .doc { border-radius: 18px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      .card, .btn { transition: none; }
+    }
+  </style>
+</head>
+<body>
+  {% assign apk_url = "https://github.com/JavierGavra/motorqu-solid/releases/latest/download/app-release.apk" %}
+  {% assign repo_url = "https://github.com/JavierGavra/motorqu-solid" %}
+
+  <nav class="nav">
+    <div class="wrap">
+      <a class="brand" href="#top"><img src="assets/web/logo-64.png" alt="" width="34" height="34">MotorQu Solid</a>
+      <div class="nav-links">
+        <a href="#fitur">Fitur</a>
+        <a href="#cara-kerja">Cara Kerja</a>
+        <a href="#tampilan">Tampilan</a>
+        <a href="#dokumentasi">Instalasi</a>
+        <a href="{{ repo_url }}">GitHub</a>
+        <a class="nav-cta" href="{{ apk_url }}">Unduh APK</a>
+      </div>
+    </div>
+  </nav>
+
+  <header class="hero" id="top">
+    <div class="wrap">
+      <div>
+        <span class="pill"><span class="dot"></span>Aplikasi Android · Data di Solid Pod</span>
+        <h1>Catat ganti oli motor keluarga. <em>Datanya tetap milikmu.</em></h1>
+        <p class="lead">
+          MotorQu Solid menyimpan data motor dan riwayat oli di Solid Pod pribadimu,
+          bukan di server pusat. Bagikan garasi ke keluarga lewat QR atau kode undangan,
+          meski Pod kalian di provider berbeda.
+        </p>
+        <div class="actions">
+          <a class="btn btn-primary" href="{{ apk_url }}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+            Unduh APK
+          </a>
+          <a class="btn btn-ghost" href="{{ repo_url }}">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.42-2.7 5.4-5.26 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"/></svg>
+            Source Code
+          </a>
+        </div>
+        <div class="meta">
+          <span id="rel-version">Rilis terbaru</span>
+          <span>Android 7.0+</span>
+          <span id="rel-size">±107 MB</span>
+          <span>Butuh akun Solid Pod gratis</span>
+        </div>
+        <div class="qr">
+          <div class="qr-box" id="qr" aria-label="QR code unduh APK"></div>
+          <div><strong>Pindai dari HP</strong>untuk langsung mengunduh APK.</div>
+        </div>
+      </div>
+      <div class="phones" aria-hidden="true">
+        <div class="phone back"><img src="assets/screenshots/06-detail-riwayat.jpg" alt=""></div>
+        <div class="phone front"><img src="assets/screenshots/02-beranda.jpg" alt=""></div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section id="fitur">
+      <div class="wrap">
+        <div class="eyebrow">Fitur</div>
+        <h2 class="section-title">Semua catatan motor keluarga, satu aplikasi</h2>
+        <p class="section-sub">Tidak perlu lagi mengingat kapan terakhir ganti oli atau mencari catatan yang tercecer di chat keluarga.</p>
+        <div class="grid">
+          <div class="card">
+            <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5.5" cy="17" r="3.5"/><circle cx="18.5" cy="17" r="3.5"/><path d="M15 6h3l2.5 7.5"/><path d="M5.5 17 9 10h6l3.5 7"/></svg></div>
+            <h3>Garasi dalam satu beranda</h3>
+            <p>Motor pribadi dan motor grup tampil bersama, lengkap dengan status oli (aman / perlu dicek) dan ringkasan garasi.</p>
+          </div>
+          <div class="card">
+            <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11Z"/></svg></div>
+            <h3>Catat ganti oli</h3>
+            <p>Simpan tanggal dan KM setiap ganti oli. Riwayat menampilkan selisih KM antar catatan.</p>
+          </div>
+          <div class="card">
+            <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></div>
+            <h3>Pengingat 30 hari</h3>
+            <p>Notifikasi per motor. Ketuk notifikasinya dan langsung masuk ke form catat oli.</p>
+          </div>
+          <div class="card">
+            <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+            <h3>Grup keluarga</h3>
+            <p>Undang lewat QR atau kode pendek seperti <code>ridlofw-K7M2QX</code>, langsung masuk. Banyak grup, banyak admin.</p>
+          </div>
+          <div class="card">
+            <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div>
+            <h3>Data milikmu</h3>
+            <p>Tersimpan sebagai file di Solid Pod pribadimu. Akses keluarga diatur lewat ACL per motor dan per grup.</p>
+          </div>
+          <div class="card">
+            <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg></div>
+            <h3>Selalu versi terbaru</h3>
+            <p>Pembaruan APK langsung dari GitHub Release tanpa uninstall. Tersedia tema terang dan gelap.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="how" id="cara-kerja">
+      <div class="wrap">
+        <div class="eyebrow">Cara kerja</div>
+        <h2 class="section-title">Tanpa server pusat, tetap bisa berbagi</h2>
+        <p class="section-sub">Setiap anggota keluarga menyimpan datanya di Pod masing-masing. Aplikasi hanya membuka akses ke data yang memang dibagikan.</p>
+        <div class="steps">
+          <div class="step">
+            <h3>Masuk dengan Solid Pod</h3>
+            <p>Daftar gratis di provider Solid mana pun, lalu login dari aplikasi.</p>
+            <div class="chips"><span class="chip">pods.solidcommunity.au</span><span class="chip">solidcommunity.net</span></div>
+          </div>
+          <div class="step">
+            <h3>Data ditulis ke Pod-mu</h3>
+            <p>Motor dan catatan oli disimpan sebagai file Turtle (<code>.ttl</code>). Perubahan dari dua HP tidak saling menimpa berkat ETag + <code>If-Match</code>.</p>
+          </div>
+          <div class="step">
+            <h3>Keluarga diberi akses</h3>
+            <p>Bergabung lewat QR atau kode undangan. Pemilik motor mengatur ACL sehingga hanya anggota grup yang bisa membaca dan mencatat.</p>
+          </div>
+        </div>
+        <div class="pod-tree" role="img" aria-label="Struktur folder data MotorQu di Solid Pod">
+<span class="c">&lt;pod&gt;/motorqu-solid/data/</span><br>
+├─ <span class="f">motorcycles/&lt;motorId&gt;/motorcycle.ttl</span> <span class="c">  data motor</span><br>
+├─ <span class="f">motorcycles/&lt;motorId&gt;/records/&lt;id&gt;.ttl</span> <span class="c">  catatan ganti oli</span><br>
+├─ <span class="f">groups/&lt;groupId&gt;.ttl</span> <span class="c">  data grup</span><br>
+├─ <span class="f">invites/&lt;KODE&gt;.ttl</span> <span class="c">  kode undangan → grup</span><br>
+└─ <span class="f">joined_groups/&lt;groupId&gt;.ttl</span> <span class="c">  grup yang diikuti</span>
+        </div>
+      </div>
+    </section>
+
+    <section id="tampilan">
+      <div class="wrap">
+        <div class="eyebrow">Tampilan</div>
+        <h2 class="section-title">Lihat aplikasinya</h2>
+        <p class="hint">Geser untuk melihat semua layar →</p>
+        <div class="gallery">
+          <figure class="shot"><div class="frame"><img src="assets/screenshots/01-login.jpg" alt="Halaman login ke Solid Pod" loading="lazy"></div><figcaption>Login ke Solid Pod</figcaption></figure>
+          <figure class="shot"><div class="frame"><img src="assets/screenshots/02-beranda.jpg" alt="Beranda dan ringkasan garasi" loading="lazy"></div><figcaption>Beranda &amp; ringkasan garasi</figcaption></figure>
+          <figure class="shot"><div class="frame"><img src="assets/screenshots/03-aksi-cepat.jpg" alt="Menu aksi cepat" loading="lazy"></div><figcaption>Menu aksi cepat</figcaption></figure>
+          <figure class="shot"><div class="frame"><img src="assets/screenshots/04-tambah-motor.jpg" alt="Form tambah motor" loading="lazy"></div><figcaption>Tambah motor</figcaption></figure>
+          <figure class="shot"><div class="frame"><img src="assets/screenshots/05-catat-oli.jpg" alt="Form catat ganti oli" loading="lazy"></div><figcaption>Catat ganti oli</figcaption></figure>
+          <figure class="shot"><div class="frame"><img src="assets/screenshots/06-detail-riwayat.jpg" alt="Detail motor dan riwayat oli" loading="lazy"></div><figcaption>Detail &amp; riwayat oli</figcaption></figure>
+          <figure class="shot"><div class="frame"><img src="assets/screenshots/07-gabung-grup.jpg" alt="Gabung grup lewat QR atau kode" loading="lazy"></div><figcaption>Gabung grup: QR / kode</figcaption></figure>
+          <figure class="shot"><div class="frame"><img src="assets/screenshots/08-profil.jpg" alt="Profil dan setelan" loading="lazy"></div><figcaption>Profil &amp; setelan</figcaption></figure>
+        </div>
+      </div>
+    </section>
+
+    <section class="docs" id="dokumentasi">
+      <div class="wrap">
+        <article class="doc">
+          {%- comment -%}
+            Isi diambil dari README.md mulai "## Instalasi". Bagian Coba Aplikasi,
+            Fitur, dan Tampilan di README sudah diwakili section di atas.
+            "## Untuk Maintainer" dilipat ke dalam <details>.
+          {%- endcomment -%}
+          {%- assign start_marker = '<h2 id="instalasi">' -%}
+          {%- assign maint_marker = '<h2 id="untuk-maintainer">' -%}
+          {%- assign after_start = content | split: start_marker -%}
+          {%- if after_start.size > 1 -%}
+            {%- assign docs = start_marker | append: after_start[1] -%}
+          {%- else -%}
+            {%- assign docs = content -%}
+          {%- endif -%}
+          {%- assign docs_parts = docs | split: maint_marker -%}
+          {{ docs_parts[0] }}
+          {%- if docs_parts.size > 1 %}
+          <details class="maint">
+            <summary>Untuk Maintainer</summary>
+            {{ docs_parts[1] | remove_first: 'Untuk Maintainer</h2>' }}
+          </details>
+          {%- endif %}
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <div class="cta">
+          <h2>Siap mencoba MotorQu Solid?</h2>
+          <p>Unduh APK-nya, daftar Solid Pod gratis, dan ajak keluarga bergabung ke garasimu.</p>
+          <div class="actions">
+            <a class="btn btn-primary" href="{{ apk_url }}">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+              Unduh APK
+            </a>
+            <a class="btn btn-ghost" href="#dokumentasi">Panduan Instalasi</a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <a class="brand" href="#top"><img src="assets/web/logo-64.png" alt="" width="28" height="28">MotorQu Solid</a>
+      <div class="links">
+        <a href="{{ repo_url }}">Source code</a>
+        <a href="{{ repo_url }}/releases">Rilis</a>
+        <a href="{{ apk_url }}">Unduh APK</a>
+        <a href="https://solidproject.org/">Tentang Solid</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script>
+    (function () {
+      var apk = "{{ apk_url }}";
+      var box = document.getElementById("qr");
+      try {
+        if (window.QRCode && box) {
+          new QRCode(box, { text: apk, width: 80, height: 80, colorDark: "#0147C1", colorLight: "#ffffff", correctLevel: QRCode.CorrectLevel.M });
+        } else if (box) {
+          box.parentNode.style.display = "none";
+        }
+      } catch (e) { if (box) box.parentNode.style.display = "none"; }
+
+      // Versi & ukuran dari rilis terbaru (fallback: teks statis di HTML).
+      fetch("https://api.github.com/repos/JavierGavra/motorqu-solid/releases/latest")
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (rel) {
+          if (!rel) return;
+          var m = /v?(\d+\.\d+\.\d+)/.exec(rel.name || rel.tag_name || "");
+          if (m) document.getElementById("rel-version").textContent = "Versi " + m[1];
+          var apkAsset = (rel.assets || []).filter(function (a) { return a.name === "app-release.apk"; })[0];
+          if (apkAsset && apkAsset.size) {
+            document.getElementById("rel-size").textContent = "±" + Math.round(apkAsset.size / 1e6) + " MB";
+          }
+        })
+        .catch(function () {});
+    })();
+  </script>
+</body>
+</html>

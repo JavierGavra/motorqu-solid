@@ -1,9 +1,8 @@
 # MotorQu Solid
 
-Aplikasi Android untuk mencatat ganti oli motor bersama keluarga. Fiturnya
-setara dengan [MotorQu](https://github.com/ridlofw/motorqu) (versi Firebase),
-tetapi seluruh data disimpan di **Solid Pod** milik masing-masing pengguna,
-bukan di server pusat.
+Aplikasi Android untuk mencatat ganti oli motor bersama keluarga. Seluruh
+data disimpan di **Solid Pod** milik masing-masing pengguna, bukan di server
+pusat: kamu yang memegang datamu, dan bebas memilih provider Pod.
 
 ## Coba Aplikasi
 

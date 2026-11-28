@@ -1,0 +1,14 @@
+# Konfigurasi GitHub Pages (Jekyll). Halaman utama = README.md yang dibungkus
+# _layouts/default.html. JANGAN menambah `exclude`, `include`, `source`, atau
+# `baseurl`: client-profile.jsonld & redirect.html di root dipakai login APK.
+title: MotorQu Solid
+description: >-
+  Catat ganti oli motor bersama keluarga. Data tersimpan di Solid Pod milikmu
+  sendiri, bukan di server pusat.
+lang: id
+
+defaults:
+  - scope:
+      path: ""
+    values:
+      layout: default

@@ -11,7 +11,7 @@ enum RefreshReason {
   periodic,
 }
 
-/// Pengganti "realtime" Firestore untuk data di Solid Pod.
+/// Sinkronisasi berkala untuk data di Solid Pod.
 ///
 /// Solid Pod tidak mengirim perubahan ke aplikasi, jadi data dari anggota
 /// keluarga lain diambil ulang saat:

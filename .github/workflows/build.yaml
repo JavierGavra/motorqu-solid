@@ -9,6 +9,10 @@ on:
       - '.gitignore'
       - '*.md'
       - 'assets/screenshots/**'
+      # Halaman GitHub Pages (tidak ikut ke APK).
+      - '_config.yml'
+      - '_layouts/**'
+      - 'assets/web/**'
   workflow_dispatch: {}
 
 permissions:
